@@ -185,6 +185,10 @@
     .case-out small { color: var(--text-muted); font-size: 0.64rem; }
 
     .metric.hot { outline: 1px solid currentColor; font-weight: 700; }
+    .tp-src { font-size: 0.66rem; color: var(--text-muted); margin: 0 0 3px 2px; }
+    .tp-scen { margin-bottom: 4px; }
+    .tp-scen-h { font-size: 0.7rem; font-weight: 700; margin: 0 0 2px 2px; }
+    .tp-scen .tp-box { margin-bottom: 4px; }
     .pat-block { padding: 3px 0 6px; border-bottom: 1px dashed #22272e; margin-bottom: 4px; }
     .pat-block:last-child { border-bottom: none; }
     .dw-pill { font-size: 0.58rem; font-weight: 700; padding: 0 4px; border-radius: 3px; margin-right: 2px; font-family: inherit; }
@@ -352,7 +356,7 @@
 
   <header>
     <div class="title-area">
-      <h1>Screener & Gráficos Cripto de FEDE</h1>
+      <h1>Screener & Gráficos Cripto Binance</h1>
       <p>En vivo tick-a-tick · Probabilidades calibradas con backtest sobre el historial</p>
     </div>
     <div class="header-actions">
@@ -1245,8 +1249,19 @@
         ? { ...predictMove(bt.move.fit, regimeBucket(atrRankAt(ser, i, CFG.atrPctLookback)), sideBucket(sTech)),
             rb: regimeBucket(atrRankAt(ser, i, CFG.atrPctLookback)), sb: sideBucket(sTech) }
         : null;
-      // Sin ventaja, los objetivos siguen a la tendencia mayor (o a los indicadores si no hay tendencia)
-      const dir = item.noEdge ? (htfNow || (sTech >= 50 ? 1 : -1)) : (item.probBull >= 50 ? 1 : -1);
+      // Dirección de los TP:
+      //  1) la probabilidad, si tiene ventaja comprobada;
+      //  2) si no, un patrón confirmado que en el portafolio haya funcionado mejor que el azar;
+      //  3) si tampoco, no hay dirección: la tarjeta muestra los dos escenarios (sube / baja).
+      item.patLive = livePatterns(kl, ser.atr, price);
+      const confPat = item.patLive.find(p => p.state === 'confirmed');
+      let dir;
+      if (!item.noEdge) { dir = item.probBull >= 50 ? 1 : -1; item.dirSrc = 'prob'; }
+      else if (confPat && hooks.patternEdge(confPat.type)) { dir = confPat.brk.dir; item.dirSrc = 'pattern'; }
+      else { dir = htfNow || (sTech >= 50 ? 1 : -1); item.dirSrc = 'none'; }
+      item.dirPattern = item.dirSrc === 'pattern' ? confPat : null;
+      // Un patrón confirmado que contradice a la probabilidad con ventaja: se avisa
+      item.patConflict = (!item.noEdge && confPat && confPat.brk.dir !== dir) ? confPat : null;
       item.dir = dir;
 
       const atr = ser.atr[i];
@@ -1278,7 +1293,6 @@
       const mKey = daily && daily.length ? `${daily.length}:${daily[daily.length - 1].time}` : '';
       if (mKey !== item.majorKey) { item.major = computeMajorLevels(daily); item.majorKey = mKey; }
       item.majorNear = majorAround(item.major, price);
-      item.patLive = livePatterns(kl, ser.atr, price);
       item.dw = dayWeekLevels(daily, now);
       item.dwStatus = dayWeekStatus(item.dw, price, ser.atr[i]);
       const pw = item.dw && item.dw.levels.filter(l => l.scope === 'semana');
@@ -1311,6 +1325,9 @@
       if (wall > 0) levels.push(wall);
 
       Object.assign(item, computeTargets(dir, price, atr, levels, regimeMult(item.atrRank)));
+      // Los dos escenarios, para cuando no hay una dirección con ventaja
+      item.scen = { up: computeTargets(1, price, atr, levels, regimeMult(item.atrRank)),
+                    dn: computeTargets(-1, price, atr, levels, regimeMult(item.atrRank)) };
       item.ready = true;
     }
 
@@ -1320,7 +1337,7 @@
         ser: null, bt: null, price: 0, obi: 0, askWall: 0, bidWall: 0,
         sTech: 50, score: 50, probCal: null, probBull: 50, dir: 1,
         rsi: null, atr: null, atrRank: null, htfTrend: 0, rs: null, relVolLive: null,
-        clusters: [], vp: null, sr: null, weeklySR: { resistance: 0, support: 0 }, dw: null, dwStatus: null, patLive: [], patHist: null, patStats: null,
+        clusters: [], vp: null, sr: null, weeklySR: { resistance: 0, support: 0 }, dw: null, dwStatus: null, dirSrc: 'none', dirPattern: null, patConflict: null, scen: null, patLive: [], patHist: null, patStats: null,
         tp1: 0, tp2: 0, tp3: 0, sl: 0, ready: false, loadError: null,
         bookSnaps: [], book: null,
         bookAnchor: null, vol: null, trades: [], tradeStats: null, rsiP: 14, btBy: null, fvg: null, move: null, analog: null, probParts: null, noEdge: true, conflict: null, major: null, majorKey: '', majorNear: null
@@ -1345,6 +1362,8 @@
     const PAT_SHORT = { hs: 'HCH', ihs: 'HCH inv.', dt: 'Doble techo', db: 'Doble suelo', at: 'Triáng. asc.',
                         dsc: 'Triáng. desc.', st: 'Triáng. sim.', rw: 'Cuña asc.', fw: 'Cuña desc.' };
     const PAT_DIR = { hs: -1, ihs: 1, dt: -1, db: 1, at: 1, dsc: -1, st: 0, rw: -1, fw: 1 };   // 0 = cualquiera
+    // ¿Este tipo de patrón funcionó mejor que el azar en el portafolio? (la interfaz lo reemplaza con datos reales)
+    const hooks = { patternEdge: () => false };
 
     // Máximos y mínimos alternados (si hay dos seguidos del mismo tipo queda el más extremo)
     function zigzag(kl, k, lastIdx) {
@@ -2878,12 +2897,7 @@
                   <div class="prob-sub" id="prob-sub-${s}"></div>
                 </div>
                 <div class="move-box" id="move-${s}"></div>
-                <div class="tp-box">
-                  <div class="tp-item"><span class="tp-label">TP1</span><span class="tp-val" id="tp1-${s}"></span><span class="tp-hit" id="tp1h-${s}"></span></div>
-                  <div class="tp-item"><span class="tp-label">TP2</span><span class="tp-val" id="tp2-${s}"></span><span class="tp-hit" id="tp2h-${s}"></span></div>
-                  <div class="tp-item"><span class="tp-label">TP3</span><span class="tp-val" id="tp3-${s}"></span><span class="tp-hit" id="tp3h-${s}"></span></div>
-                  <div class="tp-item"><span class="tp-label">SL</span><span class="tp-val sl" id="sl-${s}"></span><span class="tp-hit" id="slh-${s}"></span></div>
-                </div>
+                <div class="tp-wrap" id="tpbox-${s}"></div>
               </div>
               <div class="details-cols" id="details-${s}"></div>
             </div>
@@ -2953,7 +2967,7 @@
         set(`prob-val-${sym}`, '—');
         set(`prob-sub-${sym}`, item.loadError ? `No se pudo cargar: ${item.loadError}` : 'Historial insuficiente para analizar.');
         const m = document.getElementById(`metrics-${sym}`); if (m) m.innerHTML = '';
-        ['tp1', 'tp2', 'tp3', 'sl'].forEach(k => { set(`${k}-${sym}`, '—'); set(`${k === 'sl' ? 'slh' : k + 'h'}-${sym}`, ''); });
+        const tb0 = document.getElementById(`tpbox-${sym}`); if (tb0) tb0.innerHTML = '';
         set(`bt-foot-${sym}`, '');
         const mb0 = document.getElementById(`move-${sym}`); if (mb0) mb0.innerHTML = '';
         renderDetails(item);
@@ -3000,6 +3014,8 @@
         if (st.sell.level >= 2 && st.sell.level > st.buy.level) chips.push(metricChip('🐋 Venta grande', 'down', `Ventas: ${st.sell.verdict} (${pct(st.sell.bigShare, 0)} del volumen en órdenes grandes)`));
       }
       if (item.vol && item.vol.divergence) chips.push(metricChip(`⚠ ${item.vol.divergence.type}`, 'warn', item.vol.divergence.txt));
+      if (item.patConflict) chips.push(metricChip(`⚠ patrón ${item.patConflict.brk.dir > 0 ? '↑' : '↓'} contra la señal`, 'warn',
+        `${PAT_NAME[item.patConflict.type]} confirmado en dirección contraria a la probabilidad calibrada`));
       (item.patLive || []).forEach(p => {
         const d = patDirOf(p);
         chips.push(metricChip(`${patIcon(p.type)} ${PAT_SHORT[p.type]} ${patStateText(p)}`, d > 0 ? 'up' : d < 0 ? 'down' : 'warn',
@@ -3033,16 +3049,8 @@
         ? `${HORIZON_LABEL[tf]} · ${partsTxt} · base ${pct(item.bt.fit.base, 0)} · ${obiTxt}`
         : `Historial corto: sin calibración · ${obiTxt}`);
 
-      // Objetivos con su tasa histórica de acierto
-      const tpStats = item.bt && item.bt.tp ? item.bt.tp[item.dir] : null;
-      [['tp1', 'h1'], ['tp2', 'h2'], ['tp3', 'h3']].forEach(([k, h]) => {
-        const el = set(`${k}-${sym}`, formatPrice(item[k]));
-        if (el) el.className = `tp-val ${isBull ? 'bull' : 'bear'}`;
-        const he = set(`${k}h-${sym}`, tpStats ? `${pct(tpStats[h], 0)} hist.` : '');
-        if (he) he.title = `Alcanzado antes del SL dentro de ${TPWIN_LABEL[tf]}, en ${tpStats ? tpStats.n : 0} señales ${isBull ? 'alcistas' : 'bajistas'}`;
-      });
-      set(`sl-${sym}`, formatPrice(item.sl));
-      set(`slh-${sym}`, item.atr ? `${(Math.abs(item.price - item.sl) / item.atr).toFixed(1)} ATR` : '');
+      // Objetivos: una dirección (con su origen) o los dos escenarios si no hay ventaja
+      renderTpBox(item);
 
       // Pie con validación
       const bt = item.bt;
@@ -3213,6 +3221,8 @@
       return { cls: 'muted', txt: 'no se diferenció del azar', win, base };
     }
 
+    hooks.patternEdge = type => patternVerdict(poolPatternStats(type)).cls === 'val-up';
+
     const patIcon = t => ({ hs: '⛰', ihs: '⛰', dt: 'Ⅿ', db: 'Ⅵ', at: '◺', dsc: '◹', st: '◇', rw: '◸', fw: '◿' }[t] || '◇');
     function patDirOf(p) { return p.brk ? p.brk.dir : (PAT_DIR[p.type] || 0); }
     function patStateText(p) {
@@ -3252,6 +3262,44 @@
         </div>`;
       }).join('');
       return `<div class="d-sec"><div class="d-title">Patrones chartistas</div>${blocks}</div>`;
+    }
+
+    // Recuadro de objetivos
+    function renderTpBox(item) {
+      const el = document.getElementById(`tpbox-${item.symbol}`);
+      if (!el) return;
+      const tf = currentTimeframe, p = item.price;
+      const d = x => `${x >= p ? '+' : ''}${((x / p - 1) * 100).toFixed(2)}%`;
+      const st = dir => item.bt && item.bt.tp ? item.bt.tp[dir] : null;
+      if (item.dirSrc === 'none' && item.scen) {
+        // Sin ventaja: los dos escenarios, cada uno con sus objetivos y su stop
+        const row = (dir, sc) => {
+          const s = st(dir), cls = dir > 0 ? 'bull' : 'bear';
+          const cell = (lbl, v, h) => `<div class="tp-item"><span class="tp-label">${lbl}</span><span class="tp-val ${lbl === 'SL' ? 'sl' : cls}">${formatPrice(v)}</span><span class="tp-hit">${h}</span></div>`;
+          return `<div class="tp-scen">
+            <div class="tp-scen-h ${dir > 0 ? 'val-up' : 'val-down'}">${dir > 0 ? '↑ Si sube' : '↓ Si baja'}</div>
+            <div class="tp-box">
+              ${cell('TP1', sc.tp1, s ? `${pct(s.h1, 0)} hist.` : d(sc.tp1))}
+              ${cell('TP2', sc.tp2, s ? `${pct(s.h2, 0)} hist.` : d(sc.tp2))}
+              ${cell('TP3', sc.tp3, s ? `${pct(s.h3, 0)} hist.` : d(sc.tp3))}
+              ${cell('SL', sc.sl, d(sc.sl))}
+            </div></div>`;
+        };
+        el.innerHTML = `<div class="tp-src">Sin dirección con ventaja: dos escenarios</div>` + row(1, item.scen.up) + row(-1, item.scen.dn);
+        return;
+      }
+      const s = st(item.dir), isBull = item.dir > 0, cls = isBull ? 'bull' : 'bear';
+      const src = item.dirSrc === 'pattern'
+        ? `Según el patrón ${PAT_SHORT[item.dirPattern.type]} ${isBull ? '↑' : '↓'} (funcionó mejor que el azar en tu portafolio)`
+        : `Según la probabilidad calibrada ${isBull ? '↑' : '↓'}`;
+      const cell = (lbl, v, h, title) => `<div class="tp-item"${title ? ` title="${title}"` : ''}><span class="tp-label">${lbl}</span><span class="tp-val ${lbl === 'SL' ? 'sl' : cls}">${formatPrice(v)}</span><span class="tp-hit">${h}</span></div>`;
+      const tt = `Alcanzado antes del SL dentro de ${TPWIN_LABEL[tf]}, en ${s ? s.n : 0} señales ${isBull ? 'alcistas' : 'bajistas'}`;
+      el.innerHTML = `<div class="tp-src">${src}</div><div class="tp-box">
+        ${cell('TP1', item.tp1, s ? `${pct(s.h1, 0)} hist.` : '', tt)}
+        ${cell('TP2', item.tp2, s ? `${pct(s.h2, 0)} hist.` : '', tt)}
+        ${cell('TP3', item.tp3, s ? `${pct(s.h3, 0)} hist.` : '', tt)}
+        ${cell('SL', item.sl, item.atr ? `${(Math.abs(p - item.sl) / item.atr).toFixed(1)} ATR` : '')}
+      </div>`;
     }
 
     // Texto corto del aviso de día/semana
@@ -3498,7 +3546,10 @@
         if (item.noEdge) probEl.title = 'Sin ventaja histórica clara';
         probEl.title = item.probCal != null ? '' : 'Sin calibrar: historial corto';
       }
-      if (tp1El) { tp1El.innerText = formatPrice(item.tp1); tp1El.className = `mono ${cls}`; }
+      if (tp1El) {
+        if (item.dirSrc === 'none') { tp1El.innerText = '↕'; tp1El.className = 'mono muted'; tp1El.title = 'Sin dirección con ventaja: ver los dos escenarios en la tarjeta'; }
+        else { tp1El.innerText = formatPrice(item.tp1); tp1El.className = `mono ${cls}`; tp1El.title = ''; }
+      }
       const st = item.bt && item.bt.tp ? item.bt.tp[item.dir] : null;
       if (hitEl) hitEl.innerText = st ? pct(st.h1, 0) : '—';
       const dwEl = document.getElementById(`tbl-dw-${sym}`);
