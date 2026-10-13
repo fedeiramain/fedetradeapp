@@ -185,6 +185,8 @@
     .case-out small { color: var(--text-muted); font-size: 0.64rem; }
 
     .metric.hot { outline: 1px solid currentColor; font-weight: 700; }
+    .pat-block { padding: 3px 0 6px; border-bottom: 1px dashed #22272e; margin-bottom: 4px; }
+    .pat-block:last-child { border-bottom: none; }
     .dw-pill { font-size: 0.58rem; font-weight: 700; padding: 0 4px; border-radius: 3px; margin-right: 2px; font-family: inherit; }
     .dw-pill.zona { background: rgba(240,185,11,0.2); color: var(--accent-yellow); }
     .dw-pill.cerca { background: rgba(255,255,255,0.07); color: var(--text-muted); }
@@ -389,6 +391,7 @@
         <option value="abs">Mayor Fuerza Absoluta</option>
         <option value="edge">Mejor Rendimiento Histórico</option>
         <option value="dw">Cerca de S/R día o semana</option>
+        <option value="pat">Con patrón chartista activo</option>
         <option value="bull">Solo Alcistas</option>
         <option value="bear">Solo Bajistas</option>
       </select>
@@ -425,8 +428,8 @@
     <span><i style="border-color: rgba(234,236,239,0.55)"></i>VWAP</span>
     <span><i style="border-color: rgba(14,203,129,0.6); border-top-width: 6px"></i><i style="border-color: rgba(246,70,93,0.6); border-top-width: 6px; margin-left:-4px"></i>Volumen: compras / ventas agresivas</span>
     <span><i style="border:none;width:10px;height:10px;border-radius:50%;background:rgba(14,203,129,0.6)"></i><i style="border:none;width:10px;height:10px;border-radius:50%;background:rgba(246,70,93,0.6);margin-left:-2px"></i>Órdenes grandes (compra / venta)</span>
-    <span><i style="border-color: var(--accent-green); border-top-style: dashed"></i>TP1 / TP2</span>
-    <span><i style="border-color: #b0b8c4; border-top-style: dashed"></i>SL</span>
+    <span><i style="border-color: rgba(246,70,93,0.75); border-top-width: 2px"></i>Patrón chartista (figura, ruptura y objetivo)</span>
+    <span>Eje derecho: nombre de cada línea</span>
   </div>
 
   <div class="dashboard-grid" id="dashboard-grid">
@@ -522,6 +525,20 @@
             </tr>
           </thead>
           <tbody id="bt-body"></tbody>
+        </table>
+      </div>
+      <h3 style="font-size: 0.9rem; margin-bottom: 8px;">Patrones chartistas · todo el portafolio</h3>
+      <div class="bt-table-wrap">
+        <table class="bt-table">
+          <thead><tr>
+            <th>Patrón</th><th>Casos</th><th>Pares</th>
+            <th title="Llegó al objetivo clásico (altura de la figura) antes que al stop">Objetivo</th>
+            <th>Stop</th>
+            <th title="Acierto que tendría una entrada al azar con el mismo objetivo y el mismo stop">Al azar</th>
+            <th title="Objetivo − al azar, en puntos porcentuales">Ventaja</th>
+            <th title="Triángulos y cuñas: rompió hacia el lado que indica la teoría">Lado esperado</th>
+          </tr></thead>
+          <tbody id="pat-body"></tbody>
         </table>
       </div>
       <h3 style="font-size: 0.9rem; margin-bottom: 8px;" id="calib-title">Curva de calibración</h3>
@@ -754,6 +771,10 @@
     // Backtest con cada período de RSI (comparación) y aplica la elección
     function runBacktests(item, tf, mode) {
       item.btBy = {};
+      if (item.ser && item.klines.length > 100) {
+        item.patHist = scanPatterns(item.klines, item.ser.atr, item.klines.length - 2);
+        item.patStats = summarizePatterns(item.patHist);
+      }
       if (item.ser) {
         for (const p of RSI_PERIODS) {
           item.ser.rsi = item.ser.rsiBy[p];
@@ -1256,6 +1277,7 @@
       const mKey = daily && daily.length ? `${daily.length}:${daily[daily.length - 1].time}` : '';
       if (mKey !== item.majorKey) { item.major = computeMajorLevels(daily); item.majorKey = mKey; }
       item.majorNear = majorAround(item.major, price);
+      item.patLive = livePatterns(kl, ser.atr, price);
       item.dw = dayWeekLevels(daily, now);
       item.dwStatus = dayWeekStatus(item.dw, price, ser.atr[i]);
       const pw = item.dw && item.dw.levels.filter(l => l.scope === 'semana');
@@ -1279,6 +1301,7 @@
       const levels = item.clusters.map(c => c.price);
       if (item.vp) levels.push(item.vp.poc, ...item.vp.hvn);
       fvgs.forEach(g => levels.push(g.remTop, g.remBot, g.mid));
+      (item.patLive || []).forEach(p => { if (p.brk) levels.push(p.brk.target); else if (p.level) levels.push(p.level); });
       if (item.majorNear) item.majorNear.below.concat(item.majorNear.above).forEach(l => levels.push(l.price));
       if (item.dw) item.dw.levels.forEach(l => levels.push(l.price));
       if (item.weeklySR.resistance > 0) levels.push(item.weeklySR.resistance);
@@ -1296,11 +1319,209 @@
         ser: null, bt: null, price: 0, obi: 0, askWall: 0, bidWall: 0,
         sTech: 50, score: 50, probCal: null, probBull: 50, dir: 1,
         rsi: null, atr: null, atrRank: null, htfTrend: 0, rs: null, relVolLive: null,
-        clusters: [], vp: null, sr: null, weeklySR: { resistance: 0, support: 0 }, dw: null, dwStatus: null,
+        clusters: [], vp: null, sr: null, weeklySR: { resistance: 0, support: 0 }, dw: null, dwStatus: null, patLive: [], patHist: null, patStats: null,
         tp1: 0, tp2: 0, tp3: 0, sl: 0, ready: false, loadError: null,
         bookSnaps: [], book: null,
         bookAnchor: null, vol: null, trades: [], tradeStats: null, rsiP: 14, btBy: null, fvg: null, move: null, analog: null, probParts: null, noEdge: true, conflict: null, major: null, majorKey: '', majorNear: null
       };
+    }
+
+    // ---------------- Patrones chartistas ----------------
+    // Se detectan sobre la secuencia de máximos y mínimos confirmados (zigzag de pivotes con 4 velas a cada lado).
+    // Cada patrón tiene un nivel de ruptura, un objetivo clásico (altura de la figura proyectada desde la
+    // ruptura) y un stop. En el historial se mide si se alcanzó el objetivo antes que el stop.
+    const PAT = {
+      k: 4,              // velas a cada lado para confirmar un pivote
+      minH: 2.5,         // altura mínima de la figura, en ATR
+      minSpan: 12, maxSpan: 250,
+      waitMult: 0.6,     // la ruptura tiene que llegar dentro de 0,6 × el ancho de la figura
+      outMult: 1.5,      // ventana para medir el resultado: 1,5 × el ancho (entre 10 y 400 velas)
+      recent: 12         // "recién confirmado": ruptura en las últimas 12 velas
+    };
+    const PAT_NAME = { hs: 'Hombro-cabeza-hombro', ihs: 'HCH invertido', dt: 'Doble techo', db: 'Doble suelo',
+                       at: 'Triángulo ascendente', dsc: 'Triángulo descendente', st: 'Triángulo simétrico',
+                       rw: 'Cuña ascendente', fw: 'Cuña descendente' };
+    const PAT_SHORT = { hs: 'HCH', ihs: 'HCH inv.', dt: 'Doble techo', db: 'Doble suelo', at: 'Triáng. asc.',
+                        dsc: 'Triáng. desc.', st: 'Triáng. sim.', rw: 'Cuña asc.', fw: 'Cuña desc.' };
+    const PAT_DIR = { hs: -1, ihs: 1, dt: -1, db: 1, at: 1, dsc: -1, st: 0, rw: -1, fw: 1 };   // 0 = cualquiera
+
+    // Máximos y mínimos alternados (si hay dos seguidos del mismo tipo queda el más extremo)
+    function zigzag(kl, k, lastIdx) {
+      const piv = findPivots(kl, k, lastIdx).sort((a, b) => a.idx - b.idx || (a.type === 'H' ? -1 : 1));
+      const z = [];
+      for (const p of piv) {
+        const last = z[z.length - 1];
+        if (last && last.type === p.type) {
+          if ((p.type === 'H' && p.price > last.price) || (p.type === 'L' && p.price < last.price)) z[z.length - 1] = p;
+        } else z.push(p);
+      }
+      return z;
+    }
+
+    const lineThrough = (a, b) => ({ i1: a.idx, p1: a.price, i2: b.idx, p2: b.price,
+                                     at(i) { return this.p1 + (this.p2 - this.p1) * (i - this.i1) / (this.i2 - this.i1); } });
+
+    // Patrones cuyo último pivote es z[j]
+    function patternsEndingAt(z, j, atr) {
+      const out = [];
+      const a = atr[z[j].idx];
+      if (!a) return out;
+      const minH = PAT.minH * a;
+      const span = s => s >= PAT.minSpan && s <= PAT.maxSpan;
+      // Hombro-cabeza-hombro (H L H L H) y su invertido (L H L H L)
+      if (j >= 4) {
+        const [p1, p2, p3, p4, p5] = z.slice(j - 4, j + 1);
+        for (const inv of [false, true]) {
+          if (p1.type !== (inv ? 'L' : 'H')) continue;
+          const s = inv ? -1 : 1;                       // con s = −1 se espeja la figura
+          const neck = lineThrough(p2, p4);
+          const head = p3.price, ls = p1.price, rs = p5.price;
+          const height = s * (head - neck.at(p3.idx));
+          if (!(height >= minH) || !span(p5.idx - p1.idx)) continue;
+          if (!(s * (head - ls) > 0 && s * (head - rs) > 0)) continue;
+          if (s * (head - (s > 0 ? Math.max(ls, rs) : Math.min(ls, rs))) < 0.15 * height) continue;   // cabeza destacada
+          if (Math.abs(ls - rs) > 0.35 * height) continue;                                           // hombros parecidos
+          if (s * (ls - neck.at(p1.idx)) < 0.3 * height || s * (rs - neck.at(p5.idx)) < 0.3 * height) continue;
+          if (Math.abs(p2.price - p4.price) > 0.4 * height) continue;                                // cuello no muy inclinado
+          const r = (p3.idx - p1.idx) / Math.max(1, p5.idx - p3.idx);
+          if (r < 0.4 || r > 2.5) continue;                                                          // simetría razonable
+          out.push({ type: inv ? 'ihs' : 'hs', pts: [p1, p2, p3, p4, p5], from: p1.idx, last: p5.idx, ready: p5.conf,
+                     height, lines: [neck], dirs: [inv ? 1 : -1], stop: rs, invalid: head });
+        }
+      }
+      // Doble techo (H L H) y doble suelo (L H L), si no forman parte de un HCH recién detectado
+      if (j >= 2 && !out.length) {
+        const [p1, p2, p3] = z.slice(j - 2, j + 1);
+        for (const bot of [false, true]) {
+          if (p1.type !== (bot ? 'L' : 'H')) continue;
+          const s = bot ? -1 : 1;
+          const top = (p1.price + p3.price) / 2, height = s * (top - p2.price);
+          if (!(height >= minH) || !span(p3.idx - p1.idx)) continue;
+          if (Math.abs(p1.price - p3.price) > Math.max(0.5 * a, 0.12 * height)) continue;
+          const lvl = { i1: p2.idx, p1: p2.price, i2: p2.idx + 1, p2: p2.price, at() { return this.p1; } };
+          const ext = s > 0 ? Math.max(p1.price, p3.price) : Math.min(p1.price, p3.price);
+          out.push({ type: bot ? 'db' : 'dt', pts: [p1, p2, p3], from: p1.idx, last: p3.idx, ready: p3.conf,
+                     height, lines: [lvl], dirs: [bot ? 1 : -1], stop: ext, invalid: ext + s * 0.5 * a });
+        }
+      }
+      // Triángulos y cuñas: 5 pivotes alternados (3 de un tipo y 2 del otro)
+      if (j >= 4) {
+        const pts = z.slice(j - 4, j + 1);
+        const hs = pts.filter(p => p.type === 'H'), ls = pts.filter(p => p.type === 'L');
+        const up = lineThrough(hs[0], hs[hs.length - 1]), lo = lineThrough(ls[0], ls[ls.length - 1]);
+        const i0 = pts[0].idx, i1 = pts[4].idx;
+        const w0 = up.at(i0) - lo.at(i0), w1 = up.at(i1) - lo.at(i1);
+        const okMid = arr => arr.length < 3 || Math.abs(arr[1].price - (arr === hs ? up : lo).at(arr[1].idx)) <= 0.25 * w0;
+        if (w0 >= minH && w1 > 0 && w1 < 0.75 * w0 && span(i1 - i0) && okMid(hs) && okMid(ls)) {
+          const dU = up.at(i1) - up.at(i0), dL = lo.at(i1) - lo.at(i0), flat = Math.max(0.6 * a, 0.1 * w0);   // "plana": se mueve menos del 10% del alto
+          let type = null;
+          if (Math.abs(dU) <= flat && dL > flat) type = 'at';
+          else if (Math.abs(dL) <= flat && dU < -flat) type = 'dsc';
+          else if (dU < -flat && dL > flat) type = 'st';
+          else if (dU > flat && dL > dU) type = 'rw';
+          else if (dL < -flat && dU < dL) type = 'fw';
+          if (type) out.push({ type, pts, from: i0, last: i1, ready: pts[4].conf, height: w0, lines: [up, lo], dirs: [1, -1], tri: true });
+        }
+      }
+      return out;
+    }
+
+    // Candidatos de toda la secuencia, sin los dobles techos/suelos que son parte de un HCH
+    function allCandidates(z, atr, fromJ) {
+      const c = [];
+      for (let j = Math.max(0, fromJ || 0); j < z.length; j++) c.push(...patternsEndingAt(z, j, atr));
+      const inHS = new Set(c.filter(p => p.type === 'hs' || p.type === 'ihs').map(p => p.pts.slice(1, 4).map(q => q.idx).join(',')));
+      return c.filter(p => !((p.type === 'dt' || p.type === 'db') && inHS.has(p.pts.map(q => q.idx).join(','))));
+    }
+
+    // Busca la ruptura: H&S/dobles cruzan su línea; triángulos/cuñas salen por arriba o por abajo
+    function findBreakout(kl, pat, lastIdx) {
+      const wait = Math.max(5, Math.round(PAT.waitMult * (pat.last - pat.from)));
+      const from = Math.max(pat.last + 1, pat.ready);
+      for (let t = from; t <= Math.min(lastIdx, pat.last + wait); t++) {
+        const c = kl[t].close;
+        if (pat.tri) {
+          const u = pat.lines[0].at(t), l = pat.lines[1].at(t);
+          if (u <= l) return { state: 'invalid' };                        // llegó al vértice sin romper
+          // Stop en la línea opuesta, pero como mínimo a medio alto de la figura (cerca del vértice queda pegada)
+          const sd = Math.max(u - l, 0.5 * pat.height);
+          if (c > u) return { state: 'broken', t, dir: 1, level: u, stop: u - sd, target: u + pat.height };
+          if (c < l) return { state: 'broken', t, dir: -1, level: l, stop: l + sd, target: l - pat.height };
+        } else {
+          const d = pat.dirs[0], lv = pat.lines[0].at(t);
+          if (d < 0 ? kl[t].high > pat.invalid : kl[t].low < pat.invalid) return { state: 'invalid' };
+          if (d < 0 ? c < lv : c > lv) return { state: 'broken', t, dir: d, level: lv, stop: pat.stop, target: lv + d * pat.height };
+        }
+      }
+      return lastIdx >= pat.last + wait ? { state: 'expired' } : { state: 'pending', wait: pat.last + wait };
+    }
+
+    // Resultado después de la ruptura: objetivo o stop primero (si tocan los dos en la misma vela, cuenta como stop)
+    function patternOutcome(kl, b, span, lastIdx) {
+      const W = clamp(Math.round(PAT.outMult * span), 10, 400);
+      const c0 = kl[b.t].close, d = b.dir;
+      const tDist = Math.abs(b.target - c0), sDist = Math.abs(c0 - b.stop);
+      const p0 = tDist + sDist > 0 ? sDist / (tDist + sDist) : 0.5;     // acierto esperado al azar con esas distancias
+      for (let j = b.t + 1; j <= Math.min(lastIdx, b.t + W); j++) {
+        const hitS = d > 0 ? kl[j].low <= b.stop : kl[j].high >= b.stop;
+        const hitT = d > 0 ? kl[j].high >= b.target : kl[j].low <= b.target;
+        if (hitS) return { res: 'stop', bars: j - b.t, p0 };
+        if (hitT) return { res: 'target', bars: j - b.t, p0 };
+      }
+      return { res: b.t + W <= lastIdx ? 'none' : 'open', p0 };
+    }
+
+    // Todos los patrones del historial con su ruptura y su resultado (sin mirar el futuro)
+    function scanPatterns(kl, atr, lastIdx) {
+      const z = zigzag(kl, PAT.k, lastIdx), seen = new Set(), occ = [];
+      for (const pat of allCandidates(z, atr)) {
+        const b = findBreakout(kl, pat, lastIdx);
+        if (b.state !== 'broken') continue;
+        const key = `${pat.type}:${b.t}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        occ.push({ type: pat.type, t: b.t, dir: b.dir, ...patternOutcome(kl, b, pat.last - pat.from, lastIdx) });
+      }
+      return occ;
+    }
+
+    function summarizePatterns(occ) {
+      const st = {};
+      for (const o of occ) {
+        if (o.res === 'open') continue;
+        const s = st[o.type] || (st[o.type] = { n: 0, target: 0, stop: 0, none: 0, p0: 0, dirN: 0, dirOk: 0 });
+        s.n++; s[o.res]++; s.p0 += o.p0;
+        if (PAT_DIR[o.type]) { s.dirN++; if (o.dir === PAT_DIR[o.type]) s.dirOk++; }
+      }
+      return st;
+    }
+
+    // Patrones vivos: formándose (sin ruptura todavía) o confirmados con el resultado aún abierto
+    function livePatterns(kl, atr, price) {
+      const n = kl.length, lastClosed = n - 2;
+      if (n < 60) return [];
+      const z = zigzag(kl, PAT.k, lastClosed), out = [], seen = new Set();
+      {
+        for (const pat of allCandidates(z, atr, z.length - 10).sort((a, b) => b.last - a.last)) {
+          if (seen.has(pat.type)) continue;
+          const b = findBreakout(kl, pat, lastClosed);
+          if (b.state === 'pending') {
+            seen.add(pat.type);
+            const lv = pat.tri ? null : pat.lines[0].at(n - 1);
+            out.push({ ...pat, state: 'forming', level: lv, upper: pat.tri ? pat.lines[0].at(n - 1) : null,
+                       lower: pat.tri ? pat.lines[1].at(n - 1) : null, until: b.wait });
+          } else if (b.state === 'broken') {
+            const o = patternOutcome(kl, b, pat.last - pat.from, lastClosed);
+            if (o.res === 'open' || lastClosed - b.t <= PAT.recent) {
+              seen.add(pat.type);
+              out.push({ ...pat, state: o.res === 'open' ? 'confirmed' : o.res, brk: b, ago: lastClosed - b.t });
+            }
+          }
+        }
+      }
+      // Primero lo confirmado y abierto, después lo que se está formando; máximo 2
+      const rank = p => p.state === 'confirmed' ? 0 : p.state === 'forming' ? 1 : 2;
+      return out.sort((a, b) => rank(a) - rank(b) || b.last - a.last).slice(0, 2);
     }
 
     // ---------------- Soportes y resistencias del día y la semana anteriores ----------------
@@ -2550,7 +2771,10 @@
     // Ranking usado solo para ELEGIR qué gráficos mostrar en modo automático
     function rankForGrid(allItems, mode) {
       let sorted = allItems.slice();
-      if (mode === 'dw') {
+      if (mode === 'pat') {
+        const sc = it => { const p = (it.patLive || [])[0]; return p ? (p.state === 'confirmed' ? 0 : 1) : Infinity; };
+        sorted = sorted.filter(it => sc(it) < Infinity).sort((a, b) => sc(a) - sc(b));
+      } else if (mode === 'dw') {
         const sc = it => it.dwStatus && it.dwStatus.alert ? it.dwStatus.alert.score : Infinity;
         sorted = sorted.filter(it => sc(it) < Infinity).sort((a, b) => sc(a) - sc(b));
       } else if (mode === 'bull') sorted = sorted.filter(it => it.ready && it.probBull >= 50).sort((a, b) => b.probBull - a.probBull);
@@ -2681,6 +2905,7 @@
         msg.className = 'empty-msg';
         msg.textContent = mode === 'manual' ? 'Ninguno de los pares tildados tiene datos todavía.'
                         : mode === 'dw' ? 'Ningún par está cerca de un soporte o resistencia del día o la semana.'
+                        : mode === 'pat' ? 'Ningún par tiene un patrón chartista activo en este momento.'
                         : mode === 'bull' ? 'No hay monedas alcistas en este momento.'
                         : mode === 'bear' ? 'No hay monedas bajistas en este momento.'
                         : 'Sin datos para mostrar.';
@@ -2774,6 +2999,11 @@
         if (st.sell.level >= 2 && st.sell.level > st.buy.level) chips.push(metricChip('🐋 Venta grande', 'down', `Ventas: ${st.sell.verdict} (${pct(st.sell.bigShare, 0)} del volumen en órdenes grandes)`));
       }
       if (item.vol && item.vol.divergence) chips.push(metricChip(`⚠ ${item.vol.divergence.type}`, 'warn', item.vol.divergence.txt));
+      (item.patLive || []).forEach(p => {
+        const d = patDirOf(p);
+        chips.push(metricChip(`${patIcon(p.type)} ${PAT_SHORT[p.type]} ${patStateText(p)}`, d > 0 ? 'up' : d < 0 ? 'down' : 'warn',
+          `${PAT_NAME[p.type]} · ${patStateText(p)}`));
+      });
       if (item.dwStatus && item.dwStatus.alert) {
         const a = item.dwStatus.alert;
         chips.push(metricChip(`📍 ${dwAlertText(a)}`, `${a.role === 'soporte' ? 'up' : 'down'}${a.state === 'zona' ? ' hot' : ''}`,
@@ -2895,7 +3125,7 @@
         btSec = sec('Backtest', [row('Estado', 'historial insuficiente')]);
       }
 
-      el.innerHTML = dayWeekSection(item) + analogSection(item) + moveSection(item) + majorSection(item) + levels + fvgSection(item) + bookSection(item) + volumeSection(item) + ind + btSec;
+      el.innerHTML = dayWeekSection(item) + patternSection(item) + analogSection(item) + moveSection(item) + majorSection(item) + levels + fvgSection(item) + bookSection(item) + volumeSection(item) + ind + btSec;
     }
 
     // Bloque de la tarjeta: probabilidad de tocar +5% / −5% en la ventana
@@ -2958,6 +3188,69 @@
         rows += `<div class="d-row" title="Vela con volumen extremo. Una mecha larga del lado opuesto suele indicar agotamiento"><span class="d-k">Clímax</span><span class="d-v ${c.sell ? 'val-down' : 'val-up'}">${c.sell ? 'vendedor' : 'comprador'} hace ${c.ago} v. <small>vol ${c.rel.toFixed(1)}× · mecha ${Math.round(c.wick * 100)}%</small></span></div>`;
       }
       return `<div class="d-sec"><div class="d-title">Volumen operado · quién opera${head}</div>${rows}</div>`;
+    }
+
+    // Estadística de un tipo de patrón sumando todos los pares del portafolio (misma temporalidad)
+    function poolPatternStats(type) {
+      const z = { n: 0, target: 0, stop: 0, none: 0, p0: 0, dirN: 0, dirOk: 0, pairs: 0 };
+      Object.values(state).forEach(it => {
+        const s = it.patStats && it.patStats[type];
+        if (!s) return;
+        z.pairs++;
+        for (const k of ['n', 'target', 'stop', 'none', 'p0', 'dirN', 'dirOk']) z[k] += s[k];
+      });
+      return z;
+    }
+
+    // Veredicto honesto: ¿el patrón acertó más que una entrada al azar con el mismo objetivo y stop?
+    function patternVerdict(z) {
+      const res = z.target + z.stop;
+      if (res < 10) return { cls: 'muted', txt: `pocos casos para medir (${res})` };
+      const win = z.target / res, base = z.p0 / z.n, edge = win - base;
+      if (edge >= 0.05) return { cls: 'val-up', txt: `funcionó mejor que el azar (+${Math.round(edge * 100)} pts)`, win, base };
+      if (edge <= -0.05) return { cls: 'val-down', txt: `funcionó peor que el azar (${Math.round(edge * 100)} pts)`, win, base };
+      return { cls: 'muted', txt: 'no se diferenció del azar', win, base };
+    }
+
+    const patIcon = t => ({ hs: '⛰', ihs: '⛰', dt: 'Ⅿ', db: 'Ⅵ', at: '◺', dsc: '◹', st: '◇', rw: '◸', fw: '◿' }[t] || '◇');
+    function patDirOf(p) { return p.brk ? p.brk.dir : (PAT_DIR[p.type] || 0); }
+    function patStateText(p) {
+      if (p.state === 'forming') return 'formándose';
+      if (p.state === 'confirmed') return `confirmado ${p.brk.dir > 0 ? '↑' : '↓'}`;
+      if (p.state === 'target') return 'objetivo alcanzado ✓';
+      if (p.state === 'stop') return 'falló (tocó el stop)';
+      return 'sin resolver';
+    }
+
+    // Sección del panel: patrones activos y cómo les fue en el historial
+    function patternSection(item) {
+      const live = item.patLive || [];
+      const tf = currentTimeframe, pr = item.price;
+      const dist = x => `${x >= pr ? '+' : ''}${((x / pr - 1) * 100).toFixed(2)}%`;
+      if (!live.length) return `<div class="d-sec"><div class="d-title">Patrones chartistas</div><div class="book-note">Ningún patrón activo en ${TF_LABEL[tf].toLowerCase()}.</div></div>`;
+      const blocks = live.map(p => {
+        const d = patDirOf(p), cls = d > 0 ? 'val-up' : d < 0 ? 'val-down' : '';
+        let line = '';
+        if (p.state === 'forming') {
+          line = p.tri
+            ? `Ruptura ↑ sobre ${formatPrice(p.upper)} (${dist(p.upper)}) · ↓ bajo ${formatPrice(p.lower)} (${dist(p.lower)})`
+            : `Ruptura ${d > 0 ? '↑ sobre' : '↓ bajo'} ${formatPrice(p.level)} (${dist(p.level)}) · invalida ${d > 0 ? 'bajo' : 'sobre'} ${formatPrice(p.invalid)}`;
+        } else if (p.brk) {
+          line = `Rompió hace ${p.ago} velas · objetivo ${formatPrice(p.brk.target)} (${dist(p.brk.target)}) · stop ${formatPrice(p.brk.stop)}`;
+        }
+        const z = poolPatternStats(p.type), v = patternVerdict(z), res = z.target + z.stop;
+        const hist = res
+          ? `En tu portafolio: ${z.n} casos en ${z.pairs} par${z.pairs > 1 ? 'es' : ''} · objetivo ${pct(z.target / res, 0)} · stop ${pct(z.stop / res, 0)} · al azar ${pct(z.p0 / z.n, 0)}`
+          : 'Todavía no hay casos en el historial de tu portafolio.';
+        const dirTxt = PAT_DIR[p.type] && z.dirN ? ` · rompió hacia el lado esperado ${pct(z.dirOk / z.dirN, 0)}` : '';
+        return `<div class="pat-block">
+          <div class="d-row"><span class="d-k">${patIcon(p.type)} ${PAT_NAME[p.type]}</span><span class="d-v ${cls}">${patStateText(p)}</span></div>
+          ${line ? `<div class="book-note" style="color:var(--text-main)">${line}</div>` : ''}
+          <div class="book-note">${hist}${dirTxt}</div>
+          <div class="book-note ${v.cls}">${v.txt}</div>
+        </div>`;
+      }).join('');
+      return `<div class="d-sec"><div class="d-title">Patrones chartistas</div>${blocks}</div>`;
     }
 
     // Texto corto del aviso de día/semana
@@ -3153,7 +3446,7 @@
         tr.innerHTML = `
           <td class="sel"><input type="checkbox" id="sel-${s}" title="Mostrar el gráfico de ${s}"></td>
           <td class="rank-num">${index + 1}</td>
-          <td class="bold">${s} <span class="dw-tag" id="tbl-dw-${s}"></span></td>
+          <td class="bold">${s} <span class="dw-tag" id="tbl-dw-${s}"></span> <span class="dw-tag" id="tbl-pat-${s}"></span></td>
           <td class="mono" id="tbl-price-${s}"></td>
           <td class="bold" id="tbl-prob-${s}"></td>
           <td class="mono" id="tbl-tp1-${s}"></td>
@@ -3214,6 +3507,14 @@
         dwEl.innerText = a ? `${a.role === 'soporte' ? 'S' : 'R'} ${a.scope === 'día' ? 'día' : 'sem'}` : '';
         dwEl.title = a ? dwAlertText(a) : '';
       }
+      const patEl = document.getElementById(`tbl-pat-${sym}`);
+      if (patEl) {
+        const p = (item.patLive || [])[0];
+        const d = p ? patDirOf(p) : 0;
+        patEl.className = 'dw-tag' + (p ? (d > 0 ? ' up' : d < 0 ? ' down' : '') + (p.state === 'confirmed' ? ' hot' : '') : '');
+        patEl.innerText = p ? `${patIcon(p.type)} ${PAT_SHORT[p.type]}` : '';
+        patEl.title = p ? `${PAT_NAME[p.type]} · ${patStateText(p)}` : '';
+      }
       const mvEl = document.getElementById(`tbl-move-${sym}`);
       const mvSrc = item.analog ? { up: item.analog.pUp, dn: item.analog.pDn } : item.move;
       if (mvEl) mvEl.innerHTML = mvSrc
@@ -3234,6 +3535,17 @@
       const tf = currentTimeframe;
       document.getElementById('bt-meta').innerText =
         `Temporalidad ${TF_LABEL[tf]} · dirección medida a ${HORIZON_LABEL[tf]} · TP/SL evaluados dentro de ${TPWIN_LABEL[tf]} · comisiones ${CFG.feePct}% ida y vuelta · RSI ${rsiMode === 'auto' ? 'automático por par' : rsiMode + ' períodos'} (las columnas muestran los resultados con el RSI en uso). Tocá una fila para ver su curva de calibración.`;
+      const pb = document.getElementById('pat-body');
+      if (pb) pb.innerHTML = Object.keys(PAT_NAME).map(t => {
+        const z = poolPatternStats(t), res = z.target + z.stop;
+        if (!z.n) return `<tr><td class="bold">${patIcon(t)} ${PAT_NAME[t]}</td><td colspan="7" class="muted">sin casos</td></tr>`;
+        const win = res ? z.target / res : 0, base = z.p0 / z.n, edge = win - base;
+        const ec = res < 10 ? 'muted' : edge >= 0.05 ? 'val-up' : edge <= -0.05 ? 'val-down' : 'muted';
+        return `<tr><td class="bold">${patIcon(t)} ${PAT_NAME[t]}</td><td class="mono">${z.n}</td><td class="mono">${z.pairs}</td>
+          <td class="mono">${res ? pct(win, 0) : '—'}</td><td class="mono">${res ? pct(z.stop / res, 0) : '—'}</td><td class="mono">${pct(base, 0)}</td>
+          <td class="mono ${ec}">${res ? `${edge >= 0 ? '+' : ''}${Math.round(edge * 100)} pts${res < 10 ? ' (pocos)' : ''}` : '—'}</td>
+          <td class="mono">${PAT_DIR[t] && z.dirN ? pct(z.dirOk / z.dirN, 0) : '—'}</td></tr>`;
+      }).join('');
       const tbody = document.getElementById('bt-body');
       tbody.innerHTML = '';
       const items = Object.values(state).sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -3381,31 +3693,43 @@
       const axisTop = height * 0.895;
 
       const prices = kl.flatMap(k => [k.high, k.low]);
-      if (item.ready) [item.tp1, item.sl].forEach(p => { if (p > 0 && isFinite(p)) prices.push(p); });
       const minP = Math.min(...prices), maxP = Math.max(...prices);
       const range = (maxP - minP) || 1;
       const getY = p => priceH - ((p - minP) / range) * (priceH - 20 * dpr) - 10 * dpr;
       const inRange = p => p > 0 && p >= minP && p <= maxP;
       const cw = plotW / kl.length;
 
-      // Etiquetas del eje derecho (precio actual, TP1, TP2, SL), separadas para que no se pisen
+      // Etiquetas del eje derecho: el precio actual y el NOMBRE de cada línea de indicador, a la altura
+      // de su línea. Si dos se pisan, queda la más importante (la línea se dibuja igual).
       const lastK = kl[kl.length - 1];
       const tagH = 16 * dpr;
-      const tags = [];
-      if (item.ready) {
-        const a = item.dir > 0 ? 'rgba(14,203,129,' : 'rgba(246,70,93,';
-        tags.push({ p: item.sl, bg: '#3a3f47', fg: '#eaecef' });
-        tags.push({ p: item.tp2, bg: a + '0.35)', fg: '#eaecef' });
-        tags.push({ p: item.tp1, bg: a + '0.6)', fg: '#fff' });
+      const tags = [{ p: lastK.close, label: formatPrice(lastK.close), bg: lastK.close >= lastK.open ? '#0ecb81' : '#f6465d', fg: '#0b0e11', prio: 100 }];
+      const addTag = (p, label, bg, prio, fg) => { if (p > 0 && inRange(p)) tags.push({ p, label, bg, fg: fg || '#0b0e11', prio }); };
+      (item.patLive || []).forEach(p => {
+        if (p.brk) addTag(p.brk.target, `Obj. ${PAT_SHORT[p.type]}`, p.brk.dir > 0 ? '#0ecb81' : '#f6465d', 8.5, p.brk.dir > 0 ? '#0b0e11' : '#fff');
+        else if (p.level) addTag(p.level, `Rupt. ${PAT_SHORT[p.type]}`, '#e0c36a', 6.5);
+      });
+      if (item.dwStatus) item.dwStatus.rows.forEach(r =>
+        addTag(r.price, `${r.scope === 'día' ? 'Ayer' : 'Sem'} ${r.kind === 'high' ? 'máx' : 'mín'}`, r.scope === 'día' ? '#7fb3d5' : '#b36bd6', r.state === 'zona' ? 9 : 7));
+      if (item.majorNear) {
+        item.majorNear.above.forEach((l, i) => addTag(l.price, `R${i + 1} mayor`, '#f0b90b', 8));
+        item.majorNear.below.forEach((l, i) => addTag(l.price, `S${i + 1} mayor`, '#f0b90b', 8));
       }
-      tags.push({ p: lastK.close, bg: lastK.close >= lastK.open ? '#0ecb81' : '#f6465d', fg: '#0b0e11' });
-      const shown = tags.filter(t => inRange(t.p)).map(t => ({ ...t, y: clamp(getY(t.p), tagH / 2, priceH - tagH / 2) }))
-        .sort((a, b) => a.y - b.y);
-      for (let i = 1; i < shown.length; i++) if (shown[i].y - shown[i - 1].y < tagH + 1) shown[i].y = shown[i - 1].y + tagH + 1;
-      for (let i = shown.length - 1; i >= 0; i--) {
-        const maxY = i === shown.length - 1 ? priceH - tagH / 2 : shown[i + 1].y - tagH - 1;
-        if (shown[i].y > maxY) shown[i].y = maxY;
+      if (item.book) {
+        const wa = item.book.sides.ask.wall, wb = item.book.sides.bid.wall;
+        if (wa) addTag(wa.price, 'Muro V', '#f6465d', 6, '#fff');
+        if (wb) addTag(wb.price, 'Muro C', '#0ecb81', 6);
       }
+      if (item.vp) addTag(item.vp.poc, 'POC', '#ff9800', 5);
+      if (ser && ser.vwap[all.length - 1] != null) addTag(ser.vwap[all.length - 1], 'VWAP', '#c9ced6', 5);
+      (item.clusters || []).filter(c => c.strength >= 2)
+        .sort((a, b) => Math.abs(a.price - lastK.close) - Math.abs(b.price - lastK.close)).slice(0, 4)
+        .forEach(c => addTag(c.price, `${c.price > lastK.close ? 'R' : 'S'} ${c.strength} toq`, '#00bcd4', 3 + Math.min(c.strength, 5) * 0.2));
+      const shown = [];
+      tags.sort((a, b) => b.prio - a.prio).forEach(t => {
+        const y = clamp(getY(t.p), tagH / 2, priceH - tagH / 2);
+        if (!shown.some(o => Math.abs(o.y - y) < tagH + 1)) shown.push({ ...t, y });
+      });
 
       // Grilla con precios en el eje derecho (se omiten los que quedan debajo de una etiqueta)
       ctx.strokeStyle = '#1e2329'; ctx.lineWidth = 1;
@@ -3451,21 +3775,40 @@
       });
       ctx.globalAlpha = 1;
       // Máx./mín. de ayer (celeste) y de la semana anterior (violeta); más gruesas si el precio está en zona
-      if (item.dwStatus) {
-        const labelYs = [];
-        item.dwStatus.rows.forEach(r => {
-          if (!inRange(r.price)) return;
-          const col = r.scope === 'día' ? '#7fb3d5' : '#b36bd6';
-          hLine(r.price, col, r.state === 'zona' ? 2.4 : 1.2, r.scope === 'día' ? [7, 4] : [3, 3]);
-          // Etiqueta solo si no se pisa con otra ya dibujada
-          const ly = getY(r.price) - 3 * dpr;
-          if (labelYs.some(y => Math.abs(y - ly) < 11 * dpr)) return;
-          labelYs.push(ly);
-          ctx.fillStyle = col; ctx.textAlign = 'left';
-          ctx.fillText(`${r.scope === 'día' ? 'Ayer' : 'Sem. ant.'} ${r.kind === 'high' ? 'máx' : 'mín'}`, 4 * dpr, ly);
-        });
-      }
+      if (item.dwStatus) item.dwStatus.rows.forEach(r => {
+        if (!inRange(r.price)) return;
+        hLine(r.price, r.scope === 'día' ? '#7fb3d5' : '#b36bd6', r.state === 'zona' ? 2.4 : 1.2, r.scope === 'día' ? [7, 4] : [3, 3]);
+      });
       if (item.vp) hLine(item.vp.poc, '#ff9800', 1.4, [1, 3]);
+
+      // Patrones chartistas activos: la figura (unión de sus pivotes) y sus líneas de ruptura hasta hoy
+      (item.patLive || []).forEach(p => {
+        const d = patDirOf(p);
+        const col = d > 0 ? '14,203,129' : d < 0 ? '246,70,93' : '240,185,11';
+        const X = i => (i - start) * cw + cw / 2;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, 0, plotW, priceH); ctx.clip();
+        ctx.strokeStyle = `rgba(${col},0.75)`; ctx.lineWidth = 2; ctx.setLineDash([]);
+        ctx.beginPath();
+        p.pts.forEach((q, k) => { const x = X(q.idx), y = getY(q.price); if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+        ctx.stroke();
+        ctx.fillStyle = `rgba(${col},0.9)`;
+        p.pts.forEach(q => { ctx.beginPath(); ctx.arc(X(q.idx), getY(q.price), 2.5 * dpr, 0, Math.PI * 2); ctx.fill(); });
+        const endI = all.length - 1;
+        ctx.strokeStyle = `rgba(${col},0.6)`; ctx.lineWidth = 1.3; ctx.setLineDash([5, 4]);
+        p.lines.forEach(L => { ctx.beginPath(); ctx.moveTo(X(p.from), getY(L.at(p.from))); ctx.lineTo(X(endI), getY(L.at(endI))); ctx.stroke(); });
+        ctx.setLineDash([]);
+        if (p.brk) {   // objetivo
+          ctx.strokeStyle = `rgba(${col},0.85)`; ctx.lineWidth = 1.2; ctx.setLineDash([2, 3]);
+          const ty = getY(p.brk.target);
+          ctx.beginPath(); ctx.moveTo(X(p.brk.t), ty); ctx.lineTo(plotW, ty); ctx.stroke(); ctx.setLineDash([]);
+        }
+        // Nombre junto al último pivote (siempre a la vista), arriba si es un máximo y abajo si es un mínimo
+        const lp = p.pts[p.pts.length - 1], ly = getY(lp.price) + (lp.type === 'H' ? -7 : 14) * dpr;
+        ctx.fillStyle = `rgba(${col},0.95)`; ctx.textAlign = 'right';
+        ctx.fillText(PAT_SHORT[p.type], clamp(X(lp.idx), 40 * dpr, plotW - 4 * dpr), clamp(ly, 10 * dpr, priceH - 4 * dpr));
+        ctx.restore();
+      });
 
       // Órdenes grandes de la última hora: punto en su precio y su vela (verde compra, rojo venta)
       if (item.tradeStats && item.tradeStats.bigTrades.length) {
@@ -3491,7 +3834,6 @@
             const yy = getY(l.price);
             ctx.strokeStyle = 'rgba(240,185,11,0.75)'; ctx.lineWidth = 1.6; ctx.setLineDash([8, 4]);
             ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke(); ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(240,185,11,0.95)'; ctx.fillText(`${lbl} mayor`, plotW - 4 * dpr, yy - 3 * dpr);
             return true;
           }
           return false;
@@ -3574,19 +3916,11 @@
         ctx.fillRect(x - cw * 0.35, Math.min(oy, cy), cw * 0.7, Math.max(Math.abs(cy - oy), 1.5));
       });
 
-      // TP y SL
-      const dirCol = item.dir > 0 ? '#0ecb81' : '#f6465d';
-      if (item.ready) {
-        hLine(item.tp1, dirCol, 1.5, [4, 4]);
-        hLine(item.tp2, dirCol, 1.5, [4, 4]);
-        hLine(item.sl, '#b0b8c4', 1.3, [4, 4]);
-      }
-
       shown.forEach(t => {
         ctx.fillStyle = t.bg;
         ctx.fillRect(plotW + 1, t.y - tagH / 2, axisW - 2, tagH);
         ctx.fillStyle = t.fg; ctx.textAlign = 'left';
-        ctx.fillText(formatPrice(t.p), plotW + 5 * dpr, t.y + 3.5 * dpr);
+        ctx.fillText(t.label, plotW + 5 * dpr, t.y + 3.5 * dpr);
       });
 
       // Panel MACD (histograma)
