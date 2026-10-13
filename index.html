@@ -566,7 +566,8 @@
     const HTF_LABEL     = { '4h': '4H', '1d': 'Diaria', '1w': 'Semanal' };
 
     const CACHE_MAX = 5000;          // velas máximas guardadas por par y temporalidad
-    const MIN_VISIBLE_BARS = 40, MAX_VISIBLE_BARS = 160;   // se ajusta al ancho del gráfico
+    const MIN_VISIBLE_BARS = 40, MAX_VISIBLE_BARS = 160;
+    const VISIBLE_BARS_TF = { '15m': 32 };   // 15 min × 32 = 8 horas   // se ajusta al ancho del gráfico
     // Libro de órdenes: 1000 niveles pesan 50 en el límite de Binance (6000/min por IP).
     // Se usa un presupuesto propio de 1200/min → un pedido cada 2,5 s, rotando entre los pares.
     const DEPTH_LIMIT = 1000;
@@ -3676,7 +3677,8 @@
 
       const all = item.klines;
       if (!all.length || !width) return;
-      const nVis = clamp(Math.floor(canvas.clientWidth / 7), MIN_VISIBLE_BARS, MAX_VISIBLE_BARS);
+      // Velas visibles: en 15 min, las últimas 8 horas (32 velas) para ver más detalle; en el resto, según el ancho
+      const nVis = VISIBLE_BARS_TF[currentTimeframe] || clamp(Math.floor(canvas.clientWidth / 7), MIN_VISIBLE_BARS, MAX_VISIBLE_BARS);
       const kl = all.slice(-nVis);
       const start = all.length - kl.length;
       const lastClose = kl[kl.length - 1].close;
