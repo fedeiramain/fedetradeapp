@@ -1,0 +1,3719 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screener Cripto</title>
+  <!-- App instalable (PWA) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0b0e11">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Screener">
+  <style>
+    :root {
+      --bg-main: #0b0e11;
+      --bg-card: #181a20;
+      --bg-card-hover: #1e2329;
+      --border-color: #2b313a;
+      --text-main: #eaecef;
+      --text-muted: #848e9c;
+      --accent-green: #0ecb81;
+      --accent-green-bg: rgba(14, 203, 129, 0.12);
+      --accent-red: #f6465d;
+      --accent-red-bg: rgba(246, 70, 93, 0.12);
+      --accent-yellow: #f0b90b;
+      --accent-blue: #3861fb;
+      --accent-cyan: #00bcd4;
+      --accent-purple: #9c27b0;
+      --accent-orange: #ff9800;
+      --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { overflow-anchor: none; }   /* la página compensa el scroll por su cuenta (withScrollAnchor) */
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      padding: 16px;
+    }
+
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap; gap: 12px;
+    }
+    .title-area h1 { font-size: 1.3rem; font-weight: 700; color: #fff; }
+    .title-area p { color: var(--text-muted); font-size: 0.85rem; }
+    .header-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    .btn {
+      background: var(--bg-card); color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 8px 14px; border-radius: 6px; cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; transition: all 0.2s;
+    }
+    .btn:hover { background: var(--bg-card-hover); border-color: var(--text-muted); }
+    .btn-primary { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-card); padding: 6px 12px; border-radius: 20px;
+      border: 1px solid var(--border-color); font-size: 0.8rem;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent-yellow); display: inline-block; }
+    .status-dot.connected { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+
+    .controls-bar {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 12px;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    }
+    .controls-group { display: flex; align-items: center; gap: 12px; }
+
+    select {
+      background: var(--bg-main); border: 1px solid var(--border-color); color: #fff;
+      padding: 6px 10px; border-radius: 4px; font-size: 0.85rem;
+    }
+
+    .tf-btn-group {
+      display: flex; gap: 4px; background: var(--bg-main); padding: 3px;
+      border-radius: 6px; border: 1px solid var(--border-color);
+    }
+    .tf-btn {
+      background: transparent; color: var(--text-muted); border: none;
+      padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: 700;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .tf-btn.active { background: var(--accent-blue); color: #fff; }
+
+    .timer-badge {
+      background: rgba(240, 185, 11, 0.15); color: var(--accent-yellow);
+      border: 1px solid rgba(240, 185, 11, 0.3);
+      padding: 6px 12px; border-radius: 6px; font-weight: 700;
+      font-family: var(--font-mono); font-size: 0.82rem;
+    }
+
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px;
+      font-size: 0.72rem; color: var(--text-muted);
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
+
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 16px; transition: grid-template-columns 0.25s ease; }
+    .dashboard-grid.summary-collapsed { grid-template-columns: minmax(0, 1fr) 40px; }
+
+    /* Encabezado del resumen con la flecha para plegarlo */
+    .summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .summary-head h2 { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .collapse-btn {
+      flex: none; width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+      background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color);
+      font-size: 1rem; font-weight: 700; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .collapse-btn:hover { border-color: var(--accent-blue); color: #fff; }
+    .summary-strip { display: none; }
+    .summary-collapsed .table-container { padding: 6px 4px; overflow: hidden; cursor: pointer; }
+    .summary-collapsed .table-container > .summary-head,
+    .summary-collapsed .table-container > table { display: none; }
+    .summary-collapsed .summary-strip {
+      display: flex; flex-direction: column; align-items: center; gap: 12px; height: 100%;
+    }
+    .summary-strip .strip-label {
+      writing-mode: vertical-rl; transform: rotate(180deg);
+      color: var(--text-muted); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
+    }
+    .charts-container { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .grid-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .grid-mode { font-size: 0.75rem; color: var(--text-muted); }
+    .grid-mode a { color: var(--accent-blue); cursor: pointer; text-decoration: underline; }
+
+    /* Tarjeta: gráfico de velas 30% | datos 70% en columnas */
+    .card-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 7fr); gap: 16px; align-items: start; }
+    .chart-col { min-width: 0; }
+    .side-col { border-left: 1px solid var(--border-color); padding-left: 16px; min-width: 0; container-type: inline-size; }
+    .side-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0 12px; margin-bottom: 10px; }
+    .side-top .prob-bar-container { grid-column: 1 / -1; }
+    .side-top .move-box, .side-top .tp-box { margin-bottom: 0; }
+    .details-cols { columns: 230px; column-gap: 20px; column-rule: 1px solid #22272e; }
+    .d-sec { margin-bottom: 12px; break-inside: avoid; }
+    /* Si la columna de datos es angosta, los recuadros van uno debajo del otro */
+    @container (max-width: 820px) {
+      .side-top { grid-template-columns: 1fr; gap: 8px; }
+    }
+    .d-title {
+      font-size: 0.66rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.04em; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px solid #22272e;
+    }
+    .d-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 0.75rem; }
+    .d-k { color: var(--text-muted); white-space: nowrap; }
+    .d-v { font-family: var(--font-mono); text-align: right; }
+    .d-v small { color: var(--text-muted); font-size: 0.66rem; }
+
+    .book-note { font-size: 0.66rem; color: var(--text-muted); margin: 0 0 4px; }
+    .book-bars { margin: 6px 0 4px; }
+    .book-row { display: grid; grid-template-columns: 58px 1fr 52px; gap: 6px; align-items: center; font-size: 0.64rem; padding: 0 2px; border-radius: 3px; line-height: 1.5; }
+    .book-row.wall { background: rgba(240, 185, 11, 0.12); outline: 1px solid rgba(240, 185, 11, 0.35); }
+    .book-lbl { color: var(--text-muted); font-family: var(--font-mono); }
+    .book-val { font-family: var(--font-mono); text-align: right; }
+    .book-bar { height: 8px; background: rgba(255,255,255,0.04); border-radius: 2px; overflow: hidden; }
+    .book-bar i { display: block; height: 100%; }
+    .book-bar i.ask { background: rgba(246, 70, 93, 0.7); }
+    .book-bar i.bid { background: rgba(14, 203, 129, 0.7); }
+    .book-mid { font-size: 0.64rem; color: var(--accent-yellow); text-align: center; border-top: 1px dashed #3a3f47; border-bottom: 1px dashed #3a3f47; margin: 3px 0; padding: 1px 0; font-family: var(--font-mono); }
+
+    .move-box { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .move-item { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 6px 8px; }
+    .move-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.72rem; }
+    .move-top b { font-family: var(--font-mono); font-size: 0.95rem; }
+    .move-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; margin: 4px 0 3px; overflow: hidden; }
+    .move-bar i { display: block; height: 100%; }
+    .move-sub { font-size: 0.64rem; color: var(--text-muted); }
+
+    .case-row { padding: 5px 0; border-bottom: 1px dashed #22272e; font-size: 0.72rem; }
+    .case-top { display: flex; justify-content: space-between; color: var(--text-muted); font-family: var(--font-mono); font-size: 0.68rem; }
+    .case-sim { color: var(--accent-yellow); }
+    .case-out { margin-top: 2px; }
+    .case-out small { color: var(--text-muted); font-size: 0.64rem; }
+
+    .metric.hot { outline: 1px solid currentColor; font-weight: 700; }
+    .dw-pill { font-size: 0.58rem; font-weight: 700; padding: 0 4px; border-radius: 3px; margin-right: 2px; font-family: inherit; }
+    .dw-pill.zona { background: rgba(240,185,11,0.2); color: var(--accent-yellow); }
+    .dw-pill.cerca { background: rgba(255,255,255,0.07); color: var(--text-muted); }
+    .d-row.dw-hot { background: rgba(240,185,11,0.07); border-radius: 3px; }
+    .dw-tag { font-size: 0.6rem; font-weight: 700; padding: 0 4px; border-radius: 3px; white-space: nowrap; }
+    .dw-tag:empty { display: none; }
+    .dw-tag.up { color: var(--accent-green); background: var(--accent-green-bg); }
+    .dw-tag.down { color: var(--accent-red); background: var(--accent-red-bg); }
+    .dw-tag.hot { outline: 1px solid currentColor; }
+
+    td.sel, th.sel { width: 22px; text-align: center; }
+    input[type=checkbox] { accent-color: var(--accent-blue); width: 14px; height: 14px; cursor: pointer; }
+    #table-body tr.checked { background: rgba(56, 97, 251, 0.08); }
+
+    .empty-msg {
+      grid-column: 1 / -1; color: var(--text-muted); padding: 24px; text-align: center;
+      border: 1px dashed var(--border-color); border-radius: 8px;
+    }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 12px; display: flex; flex-direction: column; position: relative;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .symbol-name { font-size: 1.1rem; font-weight: 700; color: #fff; }
+    .symbol-price { font-size: 1.1rem; font-family: var(--font-mono); font-weight: 600; }
+
+    .metrics { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; min-height: 20px; }
+    .metric {
+      font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+      background: rgba(255,255,255,0.05); color: var(--text-muted); white-space: nowrap;
+    }
+    .metric.up { color: var(--accent-green); }
+    .metric.down { color: var(--accent-red); }
+    .metric.warn { color: var(--accent-yellow); }
+
+    .prob-bar-container { margin-bottom: 8px; }
+    .prob-labels { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px; font-weight: 600; }
+    .prob-bar { height: 6px; width: 100%; background: var(--accent-red); border-radius: 3px; overflow: hidden; display: flex; }
+    .prob-fill { height: 100%; background: var(--accent-green); transition: width 0.3s ease; }
+    .prob-sub { font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; }
+
+    .tp-box {
+      background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px;
+      padding: 6px; margin-bottom: 8px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; text-align: center;
+    }
+    .tp-item { display: flex; flex-direction: column; }
+    .tp-label { font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+    .tp-val { font-family: var(--font-mono); font-weight: 700; font-size: 0.8rem; margin-top: 2px; }
+    .tp-val.bull { color: var(--accent-green); }
+    .tp-val.bear { color: var(--accent-red); }
+    .tp-val.sl { color: #b0b8c4; }
+    .tp-hit { font-size: 0.62rem; color: var(--text-muted); margin-top: 1px; }
+
+    .canvas-wrapper { position: relative; width: 100%; height: 460px; }
+    canvas.chart { width: 100%; height: 100%; background: #111317; border-radius: 4px; cursor: crosshair; }
+
+    .chart-tooltip {
+      position: absolute; top: 6px; left: 6px;
+      background: rgba(11, 14, 17, 0.88); border: 1px solid var(--border-color); border-radius: 4px;
+      padding: 4px 8px; font-family: var(--font-mono); font-size: 0.68rem;
+      pointer-events: none; display: none; z-index: 5; max-width: calc(100% - 12px);
+    }
+    .bt-foot { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; }
+
+    .table-container {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 12px; height: calc(100vh - 190px); overflow-y: auto;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; color: var(--text-muted); font-size: 0.72rem; padding: 8px 4px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--bg-card); }
+    td { padding: 8px 4px; border-bottom: 1px solid #22272e; font-size: 0.8rem; }
+    td.mono { font-family: var(--font-mono); }
+    td.bold { font-weight: 700; }
+    td.muted, .muted { color: var(--text-muted); }
+
+    .rank-num { color: var(--text-muted); font-weight: 600; width: 24px; }
+    .val-up { color: var(--accent-green); }
+    .val-down { color: var(--accent-red); }
+
+    .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
+    .badge-bull { background: var(--accent-green-bg); color: var(--accent-green); }
+    .badge-bear { background: var(--accent-red-bg); color: var(--accent-red); }
+    .badge-none { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 1000; visibility: hidden; opacity: 0; transition: all 0.25s ease;
+    }
+    .modal-overlay.active { visibility: visible; opacity: 1; }
+    .modal {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      width: 92%; max-width: 750px; max-height: 88vh;
+      display: flex; flex-direction: column; padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto;
+    }
+    .modal.wide { max-width: 1150px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-header h2 { font-size: 1.1rem; color: #fff; }
+
+    .search-box-container { position: relative; margin-bottom: 16px; }
+    .search-input {
+      width: 100%; background: var(--bg-main); border: 1px solid var(--border-color);
+      color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 0.9rem; outline: none;
+    }
+    .search-input:focus { border-color: var(--accent-blue); }
+    .search-results {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: #111317; border: 1px solid var(--border-color);
+      border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 10; display: none;
+    }
+    .search-results.active { display: block; }
+    .search-item { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; border-bottom: 1px solid #1a1d24; }
+    .search-item:hover { background: var(--bg-card-hover); }
+
+    .portfolio-chips {
+      display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px;
+      overflow-y: auto; padding: 8px; background: var(--bg-main);
+      border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 16px;
+    }
+    .chip {
+      background: var(--bg-card); border: 1px solid var(--border-color);
+      padding: 4px 10px; border-radius: 16px; display: flex; align-items: center; gap: 8px; font-weight: 600;
+    }
+    .chip-remove { color: var(--accent-red); cursor: pointer; font-weight: 700; }
+
+    .json-tools {
+      display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.25);
+      padding: 10px; border-radius: 6px; border: 1px dashed var(--border-color); margin-bottom: 16px; flex-wrap: wrap;
+    }
+
+    .bt-meta { color: var(--text-muted); font-size: 0.78rem; margin-bottom: 12px; }
+    .bt-table-wrap { overflow-x: auto; margin-bottom: 14px; }
+    .bt-table th, .bt-table td { font-size: 0.74rem; padding: 6px 6px; white-space: nowrap; }
+    .bt-table th { position: static; }
+    .bt-table tbody tr { cursor: pointer; }
+    .bt-table tbody tr:hover { background: var(--bg-card-hover); }
+    .bt-table tbody tr.selected { background: rgba(56, 97, 251, 0.15); }
+    .calib-wrap { height: 230px; position: relative; margin-bottom: 12px; }
+    .calib-wrap canvas { width: 100%; height: 100%; background: #111317; border-radius: 6px; }
+    .bt-notes { color: var(--text-muted); font-size: 0.74rem; line-height: 1.55; }
+    .bt-notes li { margin-left: 18px; margin-bottom: 4px; }
+
+    @media (max-width: 1250px) {
+      .dashboard-grid, .dashboard-grid.summary-collapsed { grid-template-columns: 1fr; }
+      .table-container { height: 420px; }
+      .summary-collapsed .table-container { height: auto; }
+      .summary-collapsed .summary-strip { flex-direction: row; justify-content: flex-start; padding: 2px 6px; }
+      .summary-strip .strip-label { writing-mode: horizontal-tb; transform: none; }
+    }
+    @media (max-width: 900px) {
+      .card-body { grid-template-columns: 1fr; }
+      .side-col { border-left: none; padding-left: 0; border-top: 1px solid var(--border-color); padding-top: 10px; }
+      .side-top { grid-template-columns: 1fr; gap: 8px; }
+      .canvas-wrapper { height: 340px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-area">
+      <h1>Screener & Gráficos Cripto Binance</h1>
+      <p>En vivo tick-a-tick · Probabilidades calibradas con backtest sobre el historial</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="install-btn" style="display:none" onclick="installApp()">📲 Instalar app</button>
+      <button class="btn" onclick="openBacktestModal()">📊 Backtest</button>
+      <button class="btn btn-primary" onclick="openModal()">⚙ Mi Portafolio (<span id="selected-count">0</span>)</button>
+      <div class="status-badge">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-text">Conectando...</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="controls-bar">
+    <div class="controls-group">
+      <label title="Cada cuánto se reordena el resumen del portafolio. Las tarjetas de gráficos no se mueven.">Reordenar resumen:</label>
+      <select id="refresh-rate" onchange="changeRefreshInterval(this.value)">
+        <option value="15">Cada 15 Segundos</option>
+        <option value="30" selected>Cada 30 Segundos</option>
+        <option value="60">Cada 60 Segundos</option>
+      </select>
+    </div>
+
+    <div class="controls-group">
+      <label>Velas:</label>
+      <div class="tf-btn-group">
+        <button class="tf-btn active" id="tf-15m" onclick="changeTimeframe('15m')">15 Min</button>
+        <button class="tf-btn" id="tf-1h" onclick="changeTimeframe('1h')">1 Hora</button>
+        <button class="tf-btn" id="tf-1d" onclick="changeTimeframe('1d')">1 Día</button>
+      </div>
+    </div>
+
+    <div class="controls-group">
+      <label for="filter-mode">Ordenar / Filtrar:</label>
+      <select id="filter-mode" onchange="reorderAndRenderGrid()">
+        <option value="abs">Mayor Fuerza Absoluta</option>
+        <option value="edge">Mejor Rendimiento Histórico</option>
+        <option value="dw">Cerca de S/R día o semana</option>
+        <option value="bull">Solo Alcistas</option>
+        <option value="bear">Solo Bajistas</option>
+      </select>
+    </div>
+
+    <div class="controls-group">
+      <label for="rsi-mode">RSI:</label>
+      <select id="rsi-mode" onchange="changeRsiMode(this.value)" title="Período del RSI. Auto: cada par usa el que mejor funcionó en su backtest">
+        <option value="9">9 períodos</option>
+        <option value="14">14 períodos</option>
+        <option value="auto">Auto (el mejor por par)</option>
+      </select>
+    </div>
+
+    <div class="controls-group">
+      <label for="display-limit">Gráficos:</label>
+      <select id="display-limit" onchange="reorderAndRenderGrid()">
+        <option value="4">Top 4</option>
+        <option value="6">Top 6</option>
+        <option value="10" selected>Top 10</option>
+        <option value="16">Top 16</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="border-color: var(--accent-cyan)"></i>S/R por pivotes (más opaco = más toques)</span>
+    <span><i style="border-color: #7fb3d5; border-top-style: dashed"></i>Máx/mín de ayer</span>
+    <span><i style="border-color: #b36bd6; border-top-style: dashed"></i>Máx/mín semana anterior</span>
+    <span><i style="border-color: var(--accent-yellow); border-top-style: dashed; border-top-width: 2px"></i>Nivel mayor (diario) · ▲▼ fuera de la vista</span>
+    <span><i style="border-color: var(--accent-orange); border-top-style: dotted"></i>POC (perfil de volumen)</span>
+    <span><i style="border-color: rgba(246,70,93,0.55); border-top-width: 8px; opacity: 0.6"></i>Zona de muro del libro (tramo de 0,5%)</span>
+    <span><i style="border: 1px solid rgba(14,203,129,0.6); background: rgba(14,203,129,0.15); height: 8px"></i>FVG abierto (verde alcista, rojo bajista)</span>
+    <span><i style="border-color: rgba(234,236,239,0.55)"></i>VWAP</span>
+    <span><i style="border-color: rgba(14,203,129,0.6); border-top-width: 6px"></i><i style="border-color: rgba(246,70,93,0.6); border-top-width: 6px; margin-left:-4px"></i>Volumen: compras / ventas agresivas</span>
+    <span><i style="border:none;width:10px;height:10px;border-radius:50%;background:rgba(14,203,129,0.6)"></i><i style="border:none;width:10px;height:10px;border-radius:50%;background:rgba(246,70,93,0.6);margin-left:-2px"></i>Órdenes grandes (compra / venta)</span>
+    <span><i style="border-color: var(--accent-green); border-top-style: dashed"></i>TP1 / TP2</span>
+    <span><i style="border-color: #b0b8c4; border-top-style: dashed"></i>SL</span>
+  </div>
+
+  <div class="dashboard-grid" id="dashboard-grid">
+    <div>
+      <div class="grid-head">
+        <h2 style="font-size: 1rem;" id="grid-title">Gráficos en Temporalidad: 15 Minutos</h2>
+        <span class="grid-mode" id="grid-mode"></span>
+      </div>
+      <div id="charts-grid" class="charts-container"></div>
+    </div>
+
+    <div class="table-container" id="summary-panel">
+      <div class="summary-head">
+        <h2>Resumen del Portafolio (En vivo)</h2>
+        <button class="collapse-btn" onclick="toggleSummary(true)" title="Plegar el resumen para ganar espacio">›</button>
+      </div>
+      <div class="summary-strip" onclick="toggleSummary(false)" title="Abrir el resumen del portafolio">
+        <button class="collapse-btn" title="Abrir el resumen">‹</button>
+        <span class="strip-label">Resumen del portafolio · <span id="strip-count">0</span> pares</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th class="sel"><input type="checkbox" id="sel-all" title="Mostrar / ocultar todos los gráficos"></th>
+            <th>#</th>
+            <th>Par</th>
+            <th>Precio</th>
+            <th title="Probabilidad calibrada de que el precio esté más arriba al cierre del horizonte">Prob. ↑</th>
+            <th>TP1</th>
+            <th title="% de veces que el TP1 se alcanzó antes que el SL en el historial">Hit TP1</th>
+            <th title="Probabilidad de tocar +5% / −5% dentro de la ventana, según los momentos del historial más parecidos al actual">±5% ↑/↓</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal de Portafolio -->
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Gestionar mi Portafolio</h2>
+        <button class="btn" onclick="closeModal()">✕ Cerrar</button>
+      </div>
+
+      <div class="search-box-container">
+        <input type="text" id="search-input" class="search-input" placeholder="Buscar par en Binance (ej: SOL, RENDER, NEAR, PEPE)..." oninput="handleSearch(this.value)">
+        <div id="search-results" class="search-results"></div>
+      </div>
+
+      <p style="margin-bottom: 6px; color: var(--text-muted); font-size: 0.8rem;">Monedas actuales en el portafolio:</p>
+      <div id="portfolio-chips" class="portfolio-chips"></div>
+
+      <div class="json-tools">
+        <span style="font-weight: 600; color: var(--accent-yellow);">Archivos JSON:</span>
+        <button class="btn" onclick="exportJSON()">📥 Exportar JSON</button>
+        <button class="btn" onclick="document.getElementById('import-file').click()">📤 Importar JSON</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+        <button class="btn" onclick="clearHistoryCache()" title="Borra las velas guardadas en este navegador">🗑 Borrar caché de velas</button>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn" onclick="resetDefaultPortfolio()">Restaurar Por Defecto</button>
+        <button class="btn btn-primary" onclick="applySelection()">Guardar y Re-analizar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Backtest -->
+  <div id="bt-overlay" class="modal-overlay">
+    <div class="modal wide">
+      <div class="modal-header">
+        <h2>Backtest y calibración</h2>
+        <button class="btn" onclick="closeBacktestModal()">✕ Cerrar</button>
+      </div>
+      <div class="bt-meta" id="bt-meta"></div>
+      <div class="bt-table-wrap">
+        <table class="bt-table">
+          <thead>
+            <tr>
+              <th>Par</th>
+              <th>Muestras</th>
+              <th>Período</th>
+              <th title="% de veces que el precio terminó más arriba, sin importar la señal">Base ↑</th>
+              <th title="Acierto direccional en el 30% final del historial (no usado para calibrar), contra apostar siempre a la dirección más común">Acierto fuera de muestra</th>
+              <th title="Mejora del error de Brier frente a usar siempre la tasa base. Positivo = la señal aporta información">Skill</th>
+              <th title="TP1 / TP2 / TP3 alcanzados antes del SL, en señales alcistas">TP alcistas</th>
+              <th title="TP1 / TP2 / TP3 alcanzados antes del SL, en señales bajistas">TP bajistas</th>
+              <th title="Retorno medio al cierre del horizonte, en la dirección de la señal, descontando comisiones. Solo señales con puntaje ≥60 o ≤40">Ret. neto señales fuertes</th>
+              <th title="Skill fuera de muestra con cada período de RSI. ✓ = el que está en uso para ese par">RSI 9 vs 14</th>
+              <th title="Tasa general de tocar +5% / −5% en la ventana, y skill fuera de muestra de la búsqueda de casos parecidos">±5% ↑/↓ (skill)</th>
+            </tr>
+          </thead>
+          <tbody id="bt-body"></tbody>
+        </table>
+      </div>
+      <h3 style="font-size: 0.9rem; margin-bottom: 8px;" id="calib-title">Curva de calibración</h3>
+      <div class="calib-wrap"><canvas id="calib-canvas"></canvas></div>
+      <ul class="bt-notes">
+        <li>Cada vela pasada se evalúa solo con información disponible en ese momento: indicadores, pivotes ya confirmados y la tendencia de la temporalidad mayor ya cerrada.</li>
+        <li>La "Prob. ↑" de las tarjetas sale de esta tabla: es la frecuencia real con que el precio subió cuando el puntaje técnico estuvo en ese mismo rango, suavizada hacia la tasa base cuando hay pocas muestras.</li>
+        <li>El libro de órdenes no tiene historial público, así que no entra en el backtest: solo ajusta el "puntaje" en vivo. Los TP del backtest usan pivotes, FVG abiertos y ATR; los TP en vivo además usan perfil de volumen, S/R semanal y muros del libro.</li>
+        <li>Si en una misma vela se tocan el TP y el SL, se cuenta como SL (criterio conservador). Las muestras se solapan, así que el tamaño efectivo es menor que el número mostrado.</li>
+        <li>Un buen resultado pasado no garantiza resultados futuros. Esto no es asesoramiento financiero.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // CONFIGURACIÓN
+    // ============================================================
+    const DEFAULT_PORTFOLIO = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","DOTUSDT","LINKUSDT","NEARUSDT","SUIUSDT","PEPEUSDT","FETUSDT","RENDERUSDT"];
+
+    const TF_LABEL      = { '15m': '15 Minutos', '1h': '1 Hora', '1d': '1 Día' };
+    const HIST_TARGET   = { '15m': 2000, '1h': 2000, '1d': 1000 };   // velas mínimas a cargar
+    const HORIZON_LABEL = { '15m': '16 velas (4 h)', '1h': '12 velas (12 h)', '1d': '5 velas (5 días)' };
+    const TPWIN_LABEL   = { '15m': '8 h', '1h': '24 h', '1d': '10 días' };
+    const HTF_LABEL     = { '4h': '4H', '1d': 'Diaria', '1w': 'Semanal' };
+
+    const CACHE_MAX = 5000;          // velas máximas guardadas por par y temporalidad
+    const MIN_VISIBLE_BARS = 40, MAX_VISIBLE_BARS = 160;   // se ajusta al ancho del gráfico
+    // Libro de órdenes: 1000 niveles pesan 50 en el límite de Binance (6000/min por IP).
+    // Se usa un presupuesto propio de 1200/min → un pedido cada 2,5 s, rotando entre los pares.
+    const DEPTH_LIMIT = 1000;
+    const DEPTH_GAP_MS = 2500;
+    const WS_RECONNECT_MS = 3000;
+    const FLUSH_MS = 700;            // cada cuánto se recalcula y redibuja lo que cambió
+    const MAX_BT_PER_FLUSH = 1;      // backtests por ciclo (reparte la carga al cerrar vela)
+    const FETCH_CONCURRENCY = 4;
+
+    // ============================================================
+    // NÚCLEO DE CÁLCULO (funciones puras, sin DOM)
+    // ============================================================
+    // === CORE START ===
+    const TF_MS   = { '15m': 9e5, '1h': 36e5, '4h': 144e5, '1d': 864e5, '1w': 6048e5 };
+    const HTF_OF  = { '15m': '4h', '1h': '1d', '1d': '1w' };
+    const HORIZON = { '15m': 16, '1h': 12, '1d': 5 };     // velas hacia adelante para medir dirección
+    const CFG = {
+      pivotK: 3,             // velas a cada lado para confirmar un pivote
+      levelLookback: 300,    // velas hacia atrás para niveles S/R
+      vpBars: 500, vpBins: 60,
+      rsBars: 20,            // ventana de fuerza relativa vs BTC
+      atrPctLookback: 500,   // ventana para el percentil de volatilidad
+      feePct: 0.2,           // comisión ida y vuelta en %
+      calibKind: 3,          // suavizado: equivale a 3 situaciones independientes (× horizonte, por superposición)
+      dirK: 25,              // episodios parecidos para estimar la dirección a 4 h
+      minSkill: 0.01,        // skill fuera de muestra mínimo para mostrar una dirección
+      minEdge: 0.03,         // y al menos 3 puntos de diferencia con la tasa base
+      minCalibN: 150,        // muestras mínimas para usar la probabilidad calibrada
+      strongDev: 10,         // |puntaje - 50| para "señal fuerte"
+      warmup: 60
+    };
+    const BUCKETS = [5, 30, 40, 45, 50, 55, 60, 70, 95.0001];
+    const RSI_PERIODS = [9, 14];
+
+    const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+    // EMA sembrada con SMA; ignora valores null (devuelve null hasta tener p datos)
+    function emaSeries(values, p) {
+      const out = new Array(values.length).fill(null);
+      const k = 2 / (p + 1);
+      let count = 0, sum = 0, prev = null;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v == null) continue;
+        if (prev === null) {
+          sum += v; count++;
+          if (count === p) { prev = sum / p; out[i] = prev; }
+        } else {
+          prev = v * k + prev * (1 - k);
+          out[i] = prev;
+        }
+      }
+      return out;
+    }
+
+    // RSI de Wilder; out[i] alineado con la vela i
+    function rsiSeries(c, p = 14) {
+      const out = new Array(c.length).fill(null);
+      if (c.length <= p) return out;
+      const val = (g, l) => (g === 0 && l === 0) ? 50 : (l === 0 ? 100 : 100 - 100 / (1 + g / l));
+      let g = 0, l = 0;
+      for (let i = 1; i <= p; i++) { const d = c[i] - c[i - 1]; if (d >= 0) g += d; else l -= d; }
+      g /= p; l /= p;
+      out[p] = val(g, l);
+      for (let i = p + 1; i < c.length; i++) {
+        const d = c[i] - c[i - 1];
+        g = (g * (p - 1) + Math.max(d, 0)) / p;
+        l = (l * (p - 1) + Math.max(-d, 0)) / p;
+        out[i] = val(g, l);
+      }
+      return out;
+    }
+
+    // ATR de Wilder con true range (considera gaps contra el cierre anterior)
+    function atrSeries(kl, p = 14) {
+      const out = new Array(kl.length).fill(null);
+      if (kl.length < p) return out;
+      const tr = kl.map((b, i) => i === 0 ? b.high - b.low :
+        Math.max(b.high - b.low, Math.abs(b.high - kl[i - 1].close), Math.abs(b.low - kl[i - 1].close)));
+      let a = 0;
+      for (let i = 0; i < p; i++) a += tr[i];
+      a /= p; out[p - 1] = a;
+      for (let i = p; i < kl.length; i++) { a = (a * (p - 1) + tr[i]) / p; out[i] = a; }
+      return out;
+    }
+
+    // Volumen relativo: volumen de la vela / promedio de las p velas anteriores
+    function relVolSeries(kl, p = 20) {
+      const rel = new Array(kl.length).fill(null);
+      const avg = new Array(kl.length).fill(null);
+      let sum = 0;
+      for (let i = 0; i < kl.length; i++) {
+        if (i >= p) {
+          const a = sum / p;
+          avg[i] = a;
+          rel[i] = a > 0 ? kl[i].volume / a : null;
+          sum -= kl[i - p].volume;
+        }
+        sum += kl[i].volume;
+      }
+      return { rel, avg };
+    }
+
+    // VWAP de sesión (se reinicia a las 00:00 UTC)
+    function sessionVwapSeries(kl) {
+      let day = -1, pv = 0, vv = 0;
+      return kl.map(b => {
+        const d = Math.floor(b.time / 864e5);
+        if (d !== day) { day = d; pv = 0; vv = 0; }
+        const tp = (b.high + b.low + b.close) / 3;
+        pv += tp * b.volume; vv += b.volume;
+        return vv > 0 ? pv / vv : b.close;
+      });
+    }
+
+    // VWAP móvil (para velas diarias)
+    function rollingVwapSeries(kl, p = 20) {
+      const out = new Array(kl.length).fill(null);
+      let pv = 0, vv = 0;
+      for (let i = 0; i < kl.length; i++) {
+        const b = kl[i], tp = (b.high + b.low + b.close) / 3;
+        pv += tp * b.volume; vv += b.volume;
+        if (i >= p) { const o = kl[i - p]; pv -= (o.high + o.low + o.close) / 3 * o.volume; vv -= o.volume; }
+        if (i >= p - 1) out[i] = vv > 0 ? pv / vv : b.close;
+      }
+      return out;
+    }
+
+    // Tendencia de la temporalidad mayor: +1 si cierra sobre su EMA50, -1 si debajo, 0 sin datos.
+    // Solo usa velas mayores ya cerradas al cierre de cada vela (sin mirar el futuro).
+    function htfTrendSeries(kl, htf, tfMs, htfMs) {
+      const out = new Array(kl.length).fill(0);
+      if (!htf || htf.length < 51) return out;
+      const ema = emaSeries(htf.map(b => b.close), 50);
+      let j = -1;
+      for (let i = 0; i < kl.length; i++) {
+        const closeT = kl[i].time + tfMs;
+        while (j + 1 < htf.length && htf[j + 1].time + htfMs <= closeT) j++;
+        if (j >= 0 && ema[j] != null) out[i] = htf[j].close > ema[j] ? 1 : -1;
+      }
+      return out;
+    }
+
+    // Fuerza relativa vs BTC: rendimiento del par menos rendimiento de BTC en N velas (en %)
+    function rsSeries(kl, btcKl, n) {
+      const out = new Array(kl.length).fill(null);
+      if (!btcKl || !btcKl.length) return out;
+      const m = new Map();
+      for (const b of btcKl) m.set(b.time, b.close);
+      for (let i = n; i < kl.length; i++) {
+        const b0 = m.get(kl[i].time), b1 = m.get(kl[i - n].time);
+        if (b0 && b1) out[i] = ((kl[i].close / kl[i - n].close) - (b0 / b1)) * 100;
+      }
+      return out;
+    }
+
+    function computeSeries(item, tf, btcKl) {
+      const kl = item.klines;
+      if (!kl || kl.length < 30) { item.ser = null; return; }
+      const close = kl.map(b => b.close);
+      const e12 = emaSeries(close, 12), e26 = emaSeries(close, 26);
+      const macd = close.map((_, i) => (e12[i] != null && e26[i] != null) ? e12[i] - e26[i] : null);
+      const sig = emaSeries(macd, 9);
+      const hist = macd.map((m, i) => (m != null && sig[i] != null) ? m - sig[i] : null);
+      const rv = relVolSeries(kl, 20);
+      item.ser = {
+        close,
+        rsiBy: Object.fromEntries(RSI_PERIODS.map(p => [p, rsiSeries(close, p)])),
+        hist,
+        atr: atrSeries(kl),
+        relVol: rv.rel,
+        volAvg: rv.avg,
+        vwap: tf === '1d' ? rollingVwapSeries(kl, 20) : sessionVwapSeries(kl),
+        htf: htfTrendSeries(kl, item.htfKlines, TF_MS[tf], TF_MS[HTF_OF[tf]]),
+        rs: item.symbol === 'BTCUSDT' ? new Array(kl.length).fill(null) : rsSeries(kl, btcKl, CFG.rsBars),
+        ...flowSeries(kl)
+      };
+      item.ser.rsi = item.ser.rsiBy[item.rsiP] || item.ser.rsiBy[14];
+    }
+
+    // Bandas de sobrecompra/sobreventa: el RSI corto llega más seguido a los extremos, por eso 80/20
+    const rsiBands = p => p <= 9 ? [80, 20] : [70, 30];
+
+    // Elige el período de RSI de cada par. En "auto" usa el que mejor calibró en la parte de
+    // entrenamiento del backtest (el 70% inicial), nunca el tramo de validación.
+    function chooseRsi(item, mode) {
+      if (mode !== 'auto') return +mode;
+      let best = 14, bestScore = -Infinity;
+      for (const p of RSI_PERIODS) {
+        const b = item.btBy && item.btBy[p];
+        if (b && b.trainSkill != null && b.trainSkill > bestScore + 1e-9) { best = p; bestScore = b.trainSkill; }
+      }
+      return best;
+    }
+
+    function applyRsiChoice(item, mode) {
+      item.rsiP = chooseRsi(item, mode);
+      if (item.ser) item.ser.rsi = item.ser.rsiBy[item.rsiP];
+      item.bt = item.btBy ? item.btBy[item.rsiP] : null;
+    }
+
+    // Backtest con cada período de RSI (comparación) y aplica la elección
+    function runBacktests(item, tf, mode) {
+      item.btBy = {};
+      if (item.ser) {
+        for (const p of RSI_PERIODS) {
+          item.ser.rsi = item.ser.rsiBy[p];
+          item.btBy[p] = runBacktest(item, tf);
+        }
+      }
+      applyRsiChoice(item, mode);
+    }
+
+    // ---------------- Flujo de órdenes (volumen agresivo) ----------------
+    // buyRatio: parte del volumen que fueron compras a mercado. delta: compras − ventas agresivas en USDT.
+    // cvd: delta acumulado. Si la vela no trae el dato de compra (caché vieja), queda en null.
+    function flowSeries(kl) {
+      const buyRatio = new Array(kl.length).fill(null), delta = new Array(kl.length).fill(null), cvd = new Array(kl.length).fill(null);
+      let acc = 0, any = false;
+      kl.forEach((b, i) => {
+        if (b.buy != null && b.volume > 0) {
+          buyRatio[i] = b.buy / b.volume;
+          delta[i] = (2 * b.buy - b.volume) * b.close;
+          acc += delta[i]; any = true;
+        }
+        cvd[i] = any ? acc : null;
+      });
+      return { buyRatio, delta, cvd };
+    }
+
+    const FLOW = { win: 20, climaxRel: 3, climaxLook: 12, tradeBase: 200 };
+
+    // Lectura del volumen operado en la vela actual y las recientes
+    function volumeAnalysis(kl, ser, tf) {
+      const n = kl.length, i = n - 1;
+      if (n < FLOW.win + 2) return null;
+      const quoteOf = b => b.quote != null ? b.quote : b.volume * b.close;
+      const out = {};
+      // Volumen operado en 24 h vs promedio diario de los 7 días anteriores
+      const per24 = Math.max(1, Math.round(864e5 / TF_MS[tf]));
+      let q24 = 0;
+      for (let j = Math.max(0, n - per24); j < n; j++) q24 += quoteOf(kl[j]);
+      out.q24 = q24;
+      if (n >= per24 * 8) {
+        let prev = 0;
+        for (let j = n - per24 * 8; j < n - per24; j++) prev += quoteOf(kl[j]);
+        out.q24ratio = q24 / (prev / 7);
+      }
+      // Presión compradora y delta de las últimas 20 velas
+      let bv = 0, vv = 0, d20 = 0, q20 = 0, have = 0;
+      for (let j = n - FLOW.win; j < n; j++) {
+        if (kl[j].buy == null) continue;
+        bv += kl[j].buy; vv += kl[j].volume; d20 += ser.delta[j]; q20 += quoteOf(kl[j]); have++;
+      }
+      out.hasFlow = have >= FLOW.win * 0.8;
+      if (out.hasFlow) {
+        out.buyPct = vv > 0 ? bv / vv : 0.5;
+        out.delta20 = d20;
+        out.deltaNow = ser.delta[i];
+        out.buyNow = ser.buyRatio[i];
+        // Divergencia: el precio va para un lado y el flujo agresivo para el otro
+        const atrPct = ser.atr[i] ? ser.atr[i] / kl[i].close : 0.01;
+        const pChg = kl[i].close / kl[n - FLOW.win].close - 1;
+        const flowShare = q20 > 0 ? d20 / q20 : 0;                       // −1..1
+        out.priceChg = pChg; out.flowShare = flowShare;
+        if (pChg < -atrPct && out.buyPct > 0.52) out.divergence = { type: 'absorción', bull: true, txt: 'el precio baja pero predominan las compras agresivas' };
+        else if (pChg > atrPct && out.buyPct < 0.48) out.divergence = { type: 'distribución', bull: false, txt: 'el precio sube pero predominan las ventas agresivas' };
+        else out.divergence = null;
+      }
+      // Tamaño medio por operación (últimas 20 vs las 200 anteriores)
+      const avgTrade = (a, b) => { let q = 0, t = 0; for (let j = a; j < b; j++) if (kl[j].trades) { q += quoteOf(kl[j]); t += kl[j].trades; } return t ? q / t : null; };
+      const recentT = avgTrade(n - FLOW.win, n), baseT = avgTrade(Math.max(0, n - FLOW.win - FLOW.tradeBase), n - FLOW.win);
+      if (recentT && baseT) { out.avgTrade = recentT; out.tradeRatio = recentT / baseT; }
+      // Vela de clímax reciente: volumen extremo, con la mecha que muestra rechazo
+      for (let j = n - 2; j >= Math.max(1, n - 1 - FLOW.climaxLook); j--) {
+        const rv = ser.relVol[j];
+        if (rv == null || rv < FLOW.climaxRel) continue;
+        const b = kl[j], range = (b.high - b.low) || 1;
+        const lowerWick = (Math.min(b.open, b.close) - b.low) / range, upperWick = (b.high - Math.max(b.open, b.close)) / range;
+        const sell = b.close < b.open;
+        out.climax = { ago: n - 1 - j, rel: rv, sell, wick: sell ? lowerWick : upperWick,
+                       buyPct: b.buy != null && b.volume > 0 ? b.buy / b.volume : null };
+        break;
+      }
+      return out;
+    }
+
+    // ---------------- Operaciones individuales: ¿grandes o chicos? ----------------
+    // Cada aggTrade de Binance es una orden de mercado ejecutada (puede tocar varios niveles del libro).
+    const TRADES = {
+      winMs: 3600e3,      // se analiza la última hora
+      cap: 30000,         // máximo de operaciones guardadas por par
+      bigPctl: 0.99,      // "grande" = 1% superior de los tamaños…
+      bigMult: 10,        // …o 10× la mediana, lo que sea mayor
+      minBigUsd: 1000,
+      oneOrder: 0.25      // una sola orden con ≥25% del volumen de su lado = "un operador grande"
+    };
+
+    function analyzeTrades(trades, now) {
+      if (!trades || !trades.length) return null;
+      const w = trades.filter(t => now - t.T <= TRADES.winMs);
+      if (w.length < 30) return null;
+      const sorted = w.map(t => t.usd).sort((a, b) => a - b);
+      const med = sorted[Math.floor(sorted.length / 2)];
+      const pHi = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * TRADES.bigPctl))];
+      const thr = Math.max(pHi, med * TRADES.bigMult, TRADES.minBigUsd);
+      const side = isBuy => {
+        const list = w.filter(t => t.buy === isBuy);
+        let total = 0, bigUsd = 0, bigN = 0, top1 = null;
+        for (const t of list) {
+          total += t.usd;
+          if (t.usd >= thr) { bigUsd += t.usd; bigN++; }
+          if (!top1 || t.usd > top1.usd) top1 = t;
+        }
+        const bigShare = total > 0 ? bigUsd / total : 0;
+        let verdict, level;
+        if (!list.length) { verdict = 'sin operaciones'; level = 0; }
+        else if (top1 && top1.usd >= thr && top1.usd / total >= TRADES.oneOrder) { verdict = 'un operador grande'; level = 3; }
+        else if (bigShare >= 0.5) { verdict = 'pocos operadores grandes'; level = 2; }
+        else if (bigShare >= 0.25) { verdict = 'mezcla, con peso de grandes'; level = 1; }
+        else { verdict = 'muchos operadores chicos'; level = 0; }
+        return { total, n: list.length, bigN, bigUsd, bigShare, top1, verdict, level };
+      };
+      const buy = side(true), sell = side(false);
+      return {
+        from: w[0].T, to: w[w.length - 1].T, n: w.length, thr, med, buy, sell,
+        bigNet: buy.bigUsd - sell.bigUsd,
+        bigTrades: w.filter(t => t.usd >= thr).slice(-80)
+      };
+    }
+
+    // Puntaje técnico 5–95 (50 = neutro). Usa solo datos de la vela i y anteriores.
+    function scoreAt(ser, i, relVolOverride) {
+      const rsi = ser.rsi[i];
+      if (rsi == null) return null;
+      let s = 50 + (rsi - 50) * 0.6;
+      const h = ser.hist[i];
+      if (h != null) s += h > 0 ? 10 : (h < 0 ? -10 : 0);
+      const tr = ser.htf[i];
+      if (tr) s += tr * 8;
+      const rs = ser.rs[i];
+      if (rs != null) s += clamp(rs * 1.5, -8, 8);
+      const vw = ser.vwap[i];
+      if (vw) s += ser.close[i] > vw ? 5 : -5;
+      const rv = relVolOverride != null ? relVolOverride : ser.relVol[i];
+      if (rv != null) {
+        const dev = s - 50;
+        s = 50 + dev * (rv > 1.5 ? 1.15 : (rv < 0.7 ? 0.85 : 1));
+      }
+      return clamp(s, 5, 95);
+    }
+
+    // Percentil (0–100) del ATR% actual dentro de las últimas lb velas
+    function atrRankAt(ser, i, lb) {
+      const a = ser.atr[i];
+      if (a == null) return null;
+      const x = a / ser.close[i];
+      let below = 0, cnt = 0;
+      for (let j = Math.max(0, i - lb); j < i; j++) {
+        const aj = ser.atr[j];
+        if (aj == null) continue;
+        cnt++;
+        if (aj / ser.close[j] < x) below++;
+      }
+      return cnt >= 50 ? below / cnt * 100 : null;
+    }
+
+    function regimeMult(rank) {
+      if (rank == null) return 1;
+      if (rank < 20) return 1.15;   // volatilidad comprimida: suelen venir movimientos amplios
+      if (rank > 80) return 0.9;    // volatilidad extendida: objetivos más prudentes
+      return 1;
+    }
+
+    // Pivotes confirmados: máximo/mínimo local con k velas a cada lado. Solo hasta lastIdx.
+    function findPivots(kl, k, lastIdx) {
+      const out = [];
+      for (let i = k; i <= lastIdx - k; i++) {
+        let isH = true, isL = true;
+        for (let j = i - k; j <= i + k && (isH || isL); j++) {
+          if (j === i) continue;
+          if (j < i ? kl[j].high >= kl[i].high : kl[j].high > kl[i].high) isH = false;
+          if (j < i ? kl[j].low <= kl[i].low : kl[j].low < kl[i].low) isL = false;
+        }
+        if (isH) out.push({ idx: i, conf: i + k, price: kl[i].high, type: 'H' });
+        if (isL) out.push({ idx: i, conf: i + k, price: kl[i].low, type: 'L' });
+      }
+      return out;
+    }
+
+    // Agrupa precios cercanos en niveles; strength = cantidad de toques
+    function clusterLevels(prices, tol) {
+      const ps = prices.slice().sort((a, b) => a - b);
+      const groups = [];
+      let cur = null;
+      for (const p of ps) {
+        if (cur && p - cur.mean <= tol) { cur.sum += p; cur.n++; cur.mean = cur.sum / cur.n; }
+        else { cur = { sum: p, n: 1, mean: p }; groups.push(cur); }
+      }
+      return groups.map(g => ({ price: g.mean, strength: g.n }));
+    }
+
+    // Perfil de volumen: reparte el volumen de cada vela entre su mínimo y máximo
+    function volumeProfile(kl, bars, bins) {
+      const sl = kl.slice(-bars);
+      if (sl.length < 20) return null;
+      let lo = Infinity, hi = -Infinity;
+      for (const b of sl) { if (b.low < lo) lo = b.low; if (b.high > hi) hi = b.high; }
+      if (!(hi > lo)) return null;
+      const step = (hi - lo) / bins;
+      const vol = new Array(bins).fill(0);
+      for (const b of sl) {
+        const b0 = clamp(Math.floor((b.low - lo) / step), 0, bins - 1);
+        const b1 = clamp(Math.floor((b.high - lo) / step), 0, bins - 1);
+        const share = b.volume / (b1 - b0 + 1);
+        for (let x = b0; x <= b1; x++) vol[x] += share;
+      }
+      let poc = 0;
+      for (let x = 1; x < bins; x++) if (vol[x] > vol[poc]) poc = x;
+      const sorted = vol.slice().sort((a, b) => a - b);
+      const p70 = sorted[Math.floor(bins * 0.7)];
+      const hvn = [];
+      for (let x = 1; x < bins - 1; x++) {
+        if (vol[x] >= vol[x - 1] && vol[x] >= vol[x + 1] && vol[x] > p70) hvn.push(lo + (x + 0.5) * step);
+      }
+      return { poc: lo + (poc + 0.5) * step, hvn };
+    }
+
+    // Objetivos y stop a partir de niveles cercanos; si no hay niveles, usa múltiplos de ATR
+    function computeTargets(dir, price, atr, levels, mult) {
+      const sgn = dir > 0 ? 1 : -1;
+      const favor = levels.map(l => (l - price) * sgn).filter(d => d > 0.5 * atr).sort((a, b) => a - b);
+      let d1 = favor.find(d => d <= 3 * atr * mult);
+      if (d1 == null) d1 = 1.5 * atr * mult;
+      let d2 = favor.find(d => d >= d1 + 0.5 * atr && d <= 6 * atr * mult);
+      if (d2 == null) d2 = d1 + 1.5 * atr * mult;
+      const d3 = d2 + 2.5 * atr * mult;
+      const against = levels.map(l => (price - l) * sgn).filter(d => d >= 0.6 * atr && d <= 2 * atr).sort((a, b) => a - b);
+      const dsl = against.length ? against[0] + 0.2 * atr : 1.2 * atr * mult;
+      let tp1 = price + sgn * d1, tp2 = price + sgn * d2, tp3 = price + sgn * d3, sl = price - sgn * dsl;
+      if (sgn < 0) {
+        if (tp1 <= 0) tp1 = price * 0.97;
+        if (tp2 <= 0) tp2 = tp1 * 0.99;
+        if (tp3 <= 0) tp3 = tp2 * 0.9;
+      } else if (sl <= 0) sl = price * 0.5;
+      return { tp1, tp2, tp3, sl };
+    }
+
+    function bucketIndex(s) {
+      for (let i = 0; i < BUCKETS.length - 1; i++) if (s < BUCKETS[i + 1]) return i;
+      return BUCKETS.length - 2;
+    }
+
+    // Frecuencias por rango de puntaje y, dentro de cada rango, por tendencia de la temporalidad mayor
+    function fitCalibration(recs, H) {
+      const z = () => ({ n: 0, up: 0 });
+      const buckets = BUCKETS.slice(0, -1).map((lo, i) => ({ lo, hi: Math.min(95, BUCKETS[i + 1]), n: 0, up: 0, cells: [z(), z(), z()] }));
+      let up = 0;
+      for (const r of recs) {
+        const b = buckets[bucketIndex(r.s)], c = b.cells[(r.h || 0) + 1];
+        b.n++; c.n++;
+        if (r.up) { b.up++; c.up++; up++; }
+      }
+      return { buckets, base: recs.length ? up / recs.length : 0.5, total: recs.length, H: H || 1 };
+    }
+
+    // Probabilidad suavizada en dos niveles: celda (puntaje × tendencia) → rango de puntaje → tasa base.
+    // Las muestras se superponen (comparten H−1 velas), así que el suavizado se mide en situaciones
+    // independientes: K = calibKind × H muestras.
+    function calibrate(s, fit, h) {
+      const K = CFG.calibKind * (fit.H || 1);
+      const b = fit.buckets[bucketIndex(s)];
+      const pB = (b.up + K * fit.base) / (b.n + K);
+      if (h == null) return pB;
+      const c = b.cells[h + 1];
+      return (c.up + K * pB) / (c.n + K);
+    }
+
+    function runBacktest(item, tf) {
+      const kl = item.klines, ser = item.ser;
+      if (!ser) return null;
+      const H = HORIZON[tf], W = 2 * H;
+      const last = kl.length - 2;              // la última vela está en formación: se excluye
+      if (last - CFG.warmup < 200 + H) return null;
+
+      const piv = findPivots(kl, CFG.pivotK, last);
+      // FVG de todo el historial, con la vela en que se cerraron (para saber si seguían abiertos en t)
+      const gaps = findFVGs(kl, ser.atr, 2, last).map(g => ({ ...g, filledAt: trackFVG(g, kl, last).filledAt }));
+      const recs = [], moves = [];
+      const MV = MOVE.win[tf];
+      let lo = 0, hi = 0, glo = 0, ghi = 0;
+
+      for (let t = CFG.warmup; t + H <= last; t++) {
+        const s = scoreAt(ser, t);
+        const atr = ser.atr[t];
+        if (s == null || !atr) continue;
+
+        // Niveles disponibles en t: pivotes ya confirmados y dentro de la ventana + extremos de 20 velas
+        while (hi < piv.length && piv[hi].conf <= t) hi++;
+        while (lo < hi && piv[lo].idx < t - CFG.levelLookback) lo++;
+        const levels = [];
+        for (let p = lo; p < hi; p++) levels.push(piv[p].price);
+        let mx = -Infinity, mn = Infinity;
+        for (let j = Math.max(0, t - 19); j <= t; j++) {
+          if (kl[j].high > mx) mx = kl[j].high;
+          if (kl[j].low < mn) mn = kl[j].low;
+        }
+        levels.push(mx, mn);
+        // FVG abiertos en t: bordes y punto medio (CE) como niveles
+        while (ghi < gaps.length && gaps[ghi].i <= t) ghi++;
+        while (glo < ghi && gaps[glo].i < t - FVG.lookback) glo++;
+        for (let q = glo; q < ghi; q++) {
+          const g = gaps[q];
+          if (g.filledAt != null && g.filledAt <= t) continue;
+          levels.push(g.top, g.bot, (g.top + g.bot) / 2);
+        }
+
+        const dir = s >= 50 ? 1 : -1;
+        const price = kl[t].close;
+        const rank = atrRankAt(ser, t, CFG.atrPctLookback);
+        const lv = computeTargets(dir, price, atr, levels, regimeMult(rank));
+        if (t + MV <= last) {
+          const f = analogFeatures(kl, ser, t, rank);
+          moves.push({ t, time: kl[t].time, rb: regimeBucket(rank), sb: sideBucket(s), f, ...moveOutcome(kl, t, MV, MOVE.pct) });
+        }
+        const tps = [lv.tp1, lv.tp2, lv.tp3];
+        const hit = [false, false, false];
+        let barsTo1 = null;
+        const end = Math.min(t + W, last);
+        for (let j = t + 1; j <= end; j++) {
+          const h = kl[j].high, l = kl[j].low;
+          if (dir > 0 ? l <= lv.sl : h >= lv.sl) break;          // SL primero (conservador)
+          for (let m = 0; m < 3; m++) {
+            if (!hit[m] && (dir > 0 ? h >= tps[m] : l <= tps[m])) { hit[m] = true; if (m === 0) barsTo1 = j - t; }
+          }
+          if (hit[2]) break;
+        }
+        recs.push({ t, s, dir, h: ser.htf[t] || 0, f: analogFeatures(kl, ser, t, rank),
+                    up: kl[t + H].close > price, ret: kl[t + H].close / price - 1, hit, barsTo1, full: t + W <= last });
+      }
+      if (recs.length < 100) return null;
+
+      const fit = fitCalibration(recs, H);
+      const dirRows = recs.filter(r => r.f);
+      const dirModel = dirRows.length >= 200 ? { rows: dirRows, scale: featureScale(dirRows.map(r => r.f)), H } : null;
+
+      // Validación fuera de muestra: calibrar con el 70% inicial, evaluar en el 30% final
+      const split = Math.floor(recs.length * 0.7);
+      const train = recs.slice(0, split);
+      const gapT = train[train.length - 1].t + H;              // evita solapamiento entre tramos
+      const test = recs.slice(split).filter(r => r.t > gapT);
+      const fitTr = fitCalibration(train, H);
+      let oos = null, oosParts = null;
+      if (test.length >= 50) {
+        // Casos parecidos: solo se busca dentro del tramo de entrenamiento
+        const trRows = train.filter(r => r.f);
+        const scTr = trRows.length >= 100 ? featureScale(trRows.map(r => r.f)) : null;
+        const step = Math.max(1, Math.floor(H / 4));
+        const ev = { ens: [0, 0], cal: [0, 0], an: [0, 0] };   // [Brier, aciertos]
+        let accBase = 0, brBase = 0, n = 0;
+        const baseUp = fitTr.base >= 0.5;
+        test.forEach((r, idx) => {
+          if (idx % step) return;
+          const y = r.up ? 1 : 0;
+          const pc = calibrate(r.s, fitTr, r.h);
+          const a = scTr && r.f ? findAnalogs(trRows, r.f, scTr, H, CFG.dirK) : null;
+          const pa = a ? a.pUp : pc;
+          const pe = (pc + pa) / 2;
+          for (const [k, p] of [['ens', pe], ['cal', pc], ['an', pa]]) {
+            ev[k][0] += (p - y) ** 2;
+            if ((p >= 0.5) === r.up) ev[k][1]++;
+          }
+          if (baseUp === r.up) accBase++;
+          brBase += (fitTr.base - y) ** 2;
+          n++;
+        });
+        if (n >= 30) {
+          const sk = k => brBase > 0 ? 1 - ev[k][0] / brBase : 0;
+          oos = { n, acc: ev.ens[1] / n, accBase: accBase / n, skill: sk('ens') };
+          oosParts = { cal: sk('cal'), an: sk('an') };
+        }
+      }
+      // Calidad dentro del tramo de entrenamiento: sirve para elegir parámetros sin tocar la validación
+      let trB = 0, trBase = 0;
+      for (const r of train) {
+        const y = r.up ? 1 : 0;
+        trB += (calibrate(r.s, fitTr, r.h) - y) ** 2;
+        trBase += (fitTr.base - y) ** 2;
+      }
+      const trainSkill = trBase > 0 ? 1 - trB / trBase : 0;
+
+      const tp = {};
+      for (const d of [1, -1]) {
+        const rs = recs.filter(r => r.dir === d && r.full);
+        if (!rs.length) { tp[d] = null; continue; }
+        const c = [0, 0, 0];
+        let bars = 0;
+        for (const r of rs) {
+          for (let m = 0; m < 3; m++) if (r.hit[m]) c[m]++;
+          if (r.barsTo1 != null) bars += r.barsTo1;
+        }
+        tp[d] = { n: rs.length, h1: c[0] / rs.length, h2: c[1] / rs.length, h3: c[2] / rs.length, bars: c[0] ? bars / c[0] : null };
+      }
+
+      const strongRecs = recs.filter(r => Math.abs(r.s - 50) >= CFG.strongDev);
+      let strong = null;
+      if (strongRecs.length) {
+        let net = 0, win = 0;
+        for (const r of strongRecs) {
+          const x = r.dir * r.ret * 100 - CFG.feePct;
+          net += x;
+          if (x > 0) win++;
+        }
+        strong = { n: strongRecs.length, net: net / strongRecs.length, win: win / strongRecs.length };
+      }
+
+      return {
+        n: recs.length, H, fit, oos, oosParts, dirModel, tp, strong, trainSkill,
+        fvg: fvgFillStats(kl, ser.atr, CFG.warmup, last, FVG.fillWinMult * H),
+        move: moveStats(moves, MV),
+        analog: buildAnalog(moves, MV),
+        from: kl[recs[0].t].time, to: kl[recs[recs.length - 1].t].time
+      };
+    }
+
+    // Estado en vivo de la última vela (en formación)
+    function computeLive(item, tf, now) {
+      const kl = item.klines, ser = item.ser;
+      item.ready = false;
+      if (!kl || !kl.length) return;
+      const i = kl.length - 1;
+      const price = kl[i].close;
+      item.price = price;
+      if (!ser) return;
+
+      // El volumen de la vela en curso es parcial: se proyecta según el tiempo transcurrido
+      const elapsed = clamp((now - kl[i].time) / TF_MS[tf], 0.1, 1);
+      const rvLive = ser.volAvg[i] ? (kl[i].volume / elapsed) / ser.volAvg[i] : null;
+      item.relVolLive = rvLive;
+
+      const sTech = scoreAt(ser, i, rvLive);
+      if (sTech == null) return;
+      item.sTech = sTech;
+      item.score = clamp(sTech + item.obi * 15, 5, 95);
+
+      const bt = item.bt;
+      item.probParts = null;
+      if (bt && bt.n >= CFG.minCalibN) {
+        const pc = calibrate(sTech, bt.fit, ser.htf[i] || 0);
+        let pa = null, aInfo = null;
+        if (bt.dirModel && i >= 1) {
+          aInfo = findAnalogs(bt.dirModel.rows, analogFeatures(kl, ser, i - 1, atrRankAt(ser, i - 1, CFG.atrPctLookback)), bt.dirModel.scale, bt.dirModel.H, CFG.dirK);
+          if (aInfo) pa = aInfo.pUp;
+        }
+        const p = pa != null ? (pc + pa) / 2 : pc;
+        item.probCal = p * 100;
+        item.probParts = { cal: pc, an: pa, ups: aInfo ? aInfo.ups : null, k: aInfo ? aInfo.k : null };
+      } else item.probCal = null;
+      item.probBull = item.probCal != null ? item.probCal : item.score;
+      // ¿Hay ventaja real? Validación positiva y distancia suficiente de la tasa base
+      item.noEdge = !(bt && bt.oos && bt.oos.skill >= CFG.minSkill && item.probCal != null &&
+                      Math.abs(item.probCal / 100 - bt.fit.base) >= CFG.minEdge);
+      // Conflicto: la probabilidad apunta contra la tendencia mayor y contra los indicadores
+      const htfNow = ser.htf[i] || 0;
+      item.conflict = (item.probBull >= 50 && htfNow < 0 && sTech < 40) ? 'rebote contra tendencia bajista'
+                    : (item.probBull < 50 && htfNow > 0 && sTech > 60) ? 'retroceso contra tendencia alcista' : null;
+      item.analog = (bt && bt.analog)
+        ? findAnalogs(bt.analog.rows, analogFeatures(kl, ser, i - 1, atrRankAt(ser, i - 1, CFG.atrPctLookback)), bt.analog.scale, bt.analog.M)
+        : null;
+      item.move = (bt && bt.move)
+        ? { ...predictMove(bt.move.fit, regimeBucket(atrRankAt(ser, i, CFG.atrPctLookback)), sideBucket(sTech)),
+            rb: regimeBucket(atrRankAt(ser, i, CFG.atrPctLookback)), sb: sideBucket(sTech) }
+        : null;
+      // Sin ventaja, los objetivos siguen a la tendencia mayor (o a los indicadores si no hay tendencia)
+      const dir = item.noEdge ? (htfNow || (sTech >= 50 ? 1 : -1)) : (item.probBull >= 50 ? 1 : -1);
+      item.dir = dir;
+
+      const atr = ser.atr[i];
+      item.atr = atr;
+      item.atrRank = atrRankAt(ser, i, CFG.atrPctLookback);
+      item.htfTrend = ser.htf[i];
+      item.rs = ser.rs[i];
+      item.rsi = ser.rsi[i];
+
+      const piv = findPivots(kl, CFG.pivotK, kl.length - 2).filter(p => p.idx >= i - CFG.levelLookback);
+      item.clusters = clusterLevels(piv.map(p => p.price), 0.6 * atr);
+      item.vp = volumeProfile(kl, CFG.vpBars, CFG.vpBins);
+      item.vol = volumeAnalysis(kl, ser, tf);
+
+      // FVG abiertos: el más cercano de cada tipo y si el precio está dentro de alguno
+      const fvgs = openFVGs(kl, ser.atr, i);
+      const near = (arr, cmp) => arr.sort(cmp)[0] || null;
+      item.fvg = {
+        open: fvgs,
+        bullBelow: near(fvgs.filter(g => g.type > 0 && g.remBot < price), (a, b) => b.remTop - a.remTop),
+        bearAbove: near(fvgs.filter(g => g.type < 0 && g.remTop > price), (a, b) => a.remBot - b.remBot),
+        inside: fvgs.find(g => price >= g.remBot && price <= g.remTop) || null,
+        nBull: fvgs.filter(g => g.type > 0).length,
+        nBear: fvgs.filter(g => g.type < 0).length
+      };
+
+      const daily = tf === '1d' ? kl : item.dailyKlines;
+      // Niveles mayores: se recalculan solo cuando cambia el historial diario
+      const mKey = daily && daily.length ? `${daily.length}:${daily[daily.length - 1].time}` : '';
+      if (mKey !== item.majorKey) { item.major = computeMajorLevels(daily); item.majorKey = mKey; }
+      item.majorNear = majorAround(item.major, price);
+      item.dw = dayWeekLevels(daily, now);
+      item.dwStatus = dayWeekStatus(item.dw, price, ser.atr[i]);
+      const pw = item.dw && item.dw.levels.filter(l => l.scope === 'semana');
+      if (pw && pw.length === 2) item.weeklySR = { resistance: pw[0].price, support: pw[1].price };
+      else if (daily && daily.length) {
+        const d7 = daily.slice(-7);
+        item.weeklySR = { resistance: Math.max(...d7.map(b => b.high)), support: Math.min(...d7.map(b => b.low)) };
+      }
+
+      const strongLv = item.clusters.filter(c => c.strength >= 2);
+      const above = strongLv.filter(c => c.price > price).sort((a, b) => a.price - b.price)[0];
+      const below = strongLv.filter(c => c.price < price).sort((a, b) => b.price - a.price)[0];
+      const last20 = kl.slice(-20);
+      item.sr = {
+        resistance: above ? above.price : Math.max(...last20.map(b => b.high)),
+        resStrength: above ? above.strength : 0,
+        support: below ? below.price : Math.min(...last20.map(b => b.low)),
+        supStrength: below ? below.strength : 0
+      };
+
+      const levels = item.clusters.map(c => c.price);
+      if (item.vp) levels.push(item.vp.poc, ...item.vp.hvn);
+      fvgs.forEach(g => levels.push(g.remTop, g.remBot, g.mid));
+      if (item.majorNear) item.majorNear.below.concat(item.majorNear.above).forEach(l => levels.push(l.price));
+      if (item.dw) item.dw.levels.forEach(l => levels.push(l.price));
+      if (item.weeklySR.resistance > 0) levels.push(item.weeklySR.resistance);
+      if (item.weeklySR.support > 0) levels.push(item.weeklySR.support);
+      const wall = dir > 0 ? item.askWall : item.bidWall;
+      if (wall > 0) levels.push(wall);
+
+      Object.assign(item, computeTargets(dir, price, atr, levels, regimeMult(item.atrRank)));
+      item.ready = true;
+    }
+
+    function newItem(sym) {
+      return {
+        symbol: sym, klines: [], htfKlines: [], dailyKlines: [],
+        ser: null, bt: null, price: 0, obi: 0, askWall: 0, bidWall: 0,
+        sTech: 50, score: 50, probCal: null, probBull: 50, dir: 1,
+        rsi: null, atr: null, atrRank: null, htfTrend: 0, rs: null, relVolLive: null,
+        clusters: [], vp: null, sr: null, weeklySR: { resistance: 0, support: 0 }, dw: null, dwStatus: null,
+        tp1: 0, tp2: 0, tp3: 0, sl: 0, ready: false, loadError: null,
+        bookSnaps: [], book: null,
+        bookAnchor: null, vol: null, trades: [], tradeStats: null, rsiP: 14, btBy: null, fvg: null, move: null, analog: null, probParts: null, noEdge: true, conflict: null, major: null, majorKey: '', majorNear: null
+      };
+    }
+
+    // ---------------- Soportes y resistencias del día y la semana anteriores ----------------
+    // "En zona": a menos de 0,35 ATR del nivel · "cerca": a menos de 1,2 ATR (con mínimos de 0,15% y 0,5%)
+    const DW = { zoneAtr: 0.35, nearAtr: 1.2, zoneMin: 0.15, nearMin: 0.5 };
+    const dayStartUTC = t => Math.floor(t / 864e5) * 864e5;
+    const weekStartUTC = t => { const d = Math.floor(t / 864e5); return (d - ((d + 3) % 7)) * 864e5; };   // lunes 00:00 UTC
+
+    function dayWeekLevels(daily, now) {
+      if (!daily || daily.length < 2) return null;
+      const today = dayStartUTC(now), wk = weekStartUTC(now), prevWk = wk - 7 * 864e5;
+      let pd = null;
+      for (let i = daily.length - 1; i >= 0; i--) if (daily[i].time < today) { pd = daily[i]; break; }
+      const wb = daily.filter(b => b.time >= prevWk && b.time < wk);
+      const levels = [];
+      if (pd) levels.push(
+        { key: 'pdh', label: 'Máx. de ayer', scope: 'día', kind: 'high', price: pd.high },
+        { key: 'pdl', label: 'Mín. de ayer', scope: 'día', kind: 'low', price: pd.low });
+      if (wb.length) levels.push(
+        { key: 'pwh', label: 'Máx. semana anterior', scope: 'semana', kind: 'high', price: Math.max(...wb.map(b => b.high)) },
+        { key: 'pwl', label: 'Mín. semana anterior', scope: 'semana', kind: 'low', price: Math.min(...wb.map(b => b.low)) });
+      return levels.length ? { levels, pdTime: pd ? pd.time : null, prevWeek: prevWk, weekDays: wb.length } : null;
+    }
+
+    // Estado de cada nivel frente al precio actual, y el más cercano que amerita aviso
+    function dayWeekStatus(dw, price, atr) {
+      if (!dw || !(price > 0)) return null;
+      const atrPct = atr ? atr / price * 100 : 0.5;
+      const zone = Math.max(DW.zoneMin, DW.zoneAtr * atrPct), near = Math.max(DW.nearMin, DW.nearAtr * atrPct);
+      const rows = dw.levels.map(l => {
+        const dist = (l.price / price - 1) * 100;                     // + : el nivel está arriba del precio
+        const role = dist > 0 ? 'resistencia' : 'soporte';
+        const broken = (l.kind === 'high' && dist < 0) || (l.kind === 'low' && dist > 0);
+        const ad = Math.abs(dist);
+        const state = ad <= zone ? 'zona' : ad <= near ? 'cerca' : 'lejos';
+        return { ...l, dist, role, broken, state, score: ad / near };
+      });
+      const alert = rows.filter(r => r.state !== 'lejos').sort((a, b) => Math.abs(a.dist) - Math.abs(b.dist))[0] || null;
+      return { rows, zone, near, alert };
+    }
+
+    // ---------------- Niveles mayores (historial diario completo) ----------------
+    const MAJOR = {
+      pivotK: 5,          // pivote diario: máximo/mínimo con 5 días a cada lado
+      tolPct: 1.5,        // niveles a menos de 1,5% se agrupan en una misma zona
+      vpBins: 80,
+      show: 3,            // soportes y resistencias mostrados por lado
+      minStrength: 2,
+      relStrength: 0.3    // fuerza mínima relativa a la zona más fuerte del mismo lado
+    };
+
+    function computeMajorLevels(daily) {
+      if (!daily || daily.length < 30) return null;
+      const n = daily.length, last = n - 2;            // la vela diaria en curso no confirma pivotes
+      const cands = [];
+      for (const pv of findPivots(daily, MAJOR.pivotK, last)) cands.push({ price: pv.price, w: 1, src: 'pivote', piv: 1 });
+      const vp = volumeProfile(daily, n, MAJOR.vpBins);
+      if (vp) {
+        cands.push({ price: vp.poc, w: 3, src: 'POC' });
+        vp.hvn.forEach(h => cands.push({ price: h, w: 2, src: 'volumen' }));
+      }
+      let ath = -Infinity, atl = Infinity, h52 = -Infinity, l52 = Infinity;
+      daily.forEach((b, i) => {
+        if (b.high > ath) ath = b.high;
+        if (b.low < atl) atl = b.low;
+        if (i >= n - 365) { if (b.high > h52) h52 = b.high; if (b.low < l52) l52 = b.low; }
+      });
+      cands.push({ price: ath, w: 2, src: 'máx. histórico' }, { price: atl, w: 2, src: 'mín. histórico' });
+      if (h52 < ath) cands.push({ price: h52, w: 1, src: 'máx. 52 sem.' });
+      if (l52 > atl) cands.push({ price: l52, w: 1, src: 'mín. 52 sem.' });
+      // Números redondos cerca del precio (1.000, 1.500, …): pesan más si coinciden con otra cosa
+      const ref = daily[n - 1].close;
+      const step = Math.pow(10, Math.floor(Math.log10(ref)));
+      for (const [st, w, major] of [[step, 1.5, true], [step / 2, 0.75, false]]) {
+        for (let v = Math.ceil(ref * 0.4 / st) * st; v <= ref * 1.8; v += st) {
+          if (!major && Math.abs(v / step - Math.round(v / step)) < 1e-9) continue;   // ya está como redondo mayor
+          cands.push({ price: v, w, src: 'redondo', round: v, majorRound: major });
+        }
+      }
+      // Densidad de candidatos sobre el precio (escala logarítmica): cada candidato suma su peso
+      // en un entorno de ±tol. Los picos de esa densidad son las zonas donde coinciden varias razones.
+      const sig = Math.log(1 + MAJOR.tolPct / 100) / 1.5, stepX = 0.0025;
+      let lo = Infinity, hi = -Infinity;
+      for (const c of cands) { if (c.price < lo) lo = c.price; if (c.price > hi) hi = c.price; }
+      const x0 = Math.log(lo) - 3 * sig, nCell = Math.ceil((Math.log(hi) + 3 * sig - x0) / stepX) + 1;
+      const dens = new Float64Array(nCell);
+      for (const c of cands) {
+        const xc = Math.log(c.price), cMid = Math.round((xc - x0) / stepX), span = Math.ceil(3 * sig / stepX);
+        for (let k = Math.max(0, cMid - span); k <= Math.min(nCell - 1, cMid + span); k++) {
+          const z = (x0 + k * stepX - xc) / sig;
+          dens[k] += c.w * Math.exp(-0.5 * z * z);
+        }
+      }
+      const win = Math.max(1, Math.round(1.2 * sig / stepX));
+      const levels = [];
+      for (let k = 0; k < nCell; k++) {
+        if (dens[k] <= 0) continue;
+        let peak = true;
+        for (let j = Math.max(0, k - win); j <= Math.min(nCell - 1, k + win) && peak; j++) if (j !== k && dens[j] > dens[k]) peak = false;
+        if (!peak) continue;
+        let price = Math.exp(x0 + k * stepX);
+        // Fuentes y toques dentro de la zona; si hay un redondo mayor cerca, se usa ese número exacto
+        const near = cands.filter(c => Math.abs(c.price / price - 1) * 100 <= MAJOR.tolPct);
+        // Prioriza el redondo mayor (1.000) sobre el intermedio (1.500) y, entre iguales, el más cercano
+        const rnd = near.filter(c => c.round).sort((a, b) => (b.majorRound - a.majorRound) || (Math.abs(a.price - price) - Math.abs(b.price - price)))[0];
+        if (rnd) price = rnd.round;
+        levels.push({
+          price, strength: dens[k],
+          touches: near.reduce((a, c) => a + (c.piv || 0), 0),
+          sources: [...new Set(near.map(c => c.src))],
+          round: !!rnd
+        });
+      }
+      return { levels, from: daily[0].time, days: n };
+    }
+
+    // Los soportes/resistencias mayores más cercanos al precio actual
+    function majorAround(major, price) {
+      if (!major) return null;
+      // Solo zonas relevantes: al menos 30% de la fuerza de la zona más fuerte de ese lado (dentro de ±60%)
+      const side = cond => {
+        const pool = major.levels.filter(l => cond(l) && Math.abs(l.price / price - 1) < 0.6);
+        const top = Math.max(0, ...pool.map(l => l.strength));
+        return pool.filter(l => l.strength >= Math.max(MAJOR.minStrength, MAJOR.relStrength * top));
+      };
+      const below = side(l => l.price < price * 0.997).sort((a, b) => b.price - a.price).slice(0, MAJOR.show);
+      const above = side(l => l.price > price * 1.003).sort((a, b) => a.price - b.price).slice(0, MAJOR.show);
+      return { below, above, from: major.from, days: major.days };
+    }
+
+    // ---------------- Probabilidad de movimiento grande (±5%) ----------------
+    // Evento: dentro de la ventana, el precio TOCA +5% (alcista) o −5% (bajista) desde el cierre actual.
+    // Condiciones: régimen de volatilidad (percentil del ATR) y sesgo de la señal (puntaje técnico).
+    const MOVE = {
+      pct: 5,
+      win: { '15m': 96, '1h': 72, '1d': 10 },          // 24 h, 3 días, 10 días
+      winLabel: { '15m': '24 h', '1h': '3 días', '1d': '10 días' },
+      Kind: 3,            // suavizado: equivale a 3 ventanas independientes de "opinión previa"
+      minIndep: 30        // por debajo de esto, la estimación se marca como poco confiable
+    };
+    const REGIME_LABEL = ['comprimida', 'baja-media', 'media-alta', 'expandida'];
+    const SIDE_LABEL = ['bajista', 'neutra', 'alcista'];
+    const regimeBucket = r => r == null ? 1 : r < 20 ? 0 : r < 50 ? 1 : r < 80 ? 2 : 3;
+    const sideBucket = s => s < 45 ? 0 : s <= 55 ? 1 : 2;
+
+    // Mira hacia adelante desde t si se toca +pct o −pct, y cuántas velas tardó
+    function moveOutcome(kl, t, M, pct) {
+      const p = kl[t].close, upL = p * (1 + pct / 100), dnL = p * (1 - pct / 100);
+      let upAt = null, dnAt = null, hi = -Infinity, lo = Infinity;
+      for (let j = t + 1; j <= t + M; j++) {
+        if (upAt == null && kl[j].high >= upL) upAt = j - t;
+        if (dnAt == null && kl[j].low <= dnL) dnAt = j - t;
+        if (kl[j].high > hi) hi = kl[j].high;
+        if (kl[j].low < lo) lo = kl[j].low;
+      }
+      return { up: upAt != null, dn: dnAt != null, upAt, dnAt, maxUp: (hi / p - 1) * 100, maxDn: (lo / p - 1) * 100 };
+    }
+
+    function fitMoves(moves, M) {
+      const z = () => ({ n: 0, up: 0, dn: 0, any: 0 });
+      const add = (c, m) => { c.n++; if (m.up) c.up++; if (m.dn) c.dn++; if (m.up || m.dn) c.any++; };
+      const base = z(), reg = [0, 1, 2, 3].map(z), cell = [0, 1, 2, 3].map(() => [0, 1, 2].map(z));
+      const upBars = [], dnBars = [];
+      for (const m of moves) {
+        add(base, m); add(reg[m.rb], m); add(cell[m.rb][m.sb], m);
+        if (m.upAt != null) upBars.push(m.upAt);
+        if (m.dnAt != null) dnBars.push(m.dnAt);
+      }
+      return { base, reg, cell, upBars: median(upBars), dnBars: median(dnBars), M };
+    }
+
+    // Probabilidad de la celda (régimen × sesgo), suavizada hacia el régimen y este hacia la tasa general
+    // Las muestras se superponen (cada una comparte M−1 velas con la siguiente), así que el
+    // suavizado se mide en ventanas independientes: K = Kind × M velas.
+    function predictMove(fit, rb, sb) {
+      const K = MOVE.Kind * (fit.M || 1);
+      const sh = (k, n, p) => (k + K * p) / (n + K);
+      const out = {};
+      for (const e of ['up', 'dn', 'any']) {
+        const pBase = fit.base.n ? fit.base[e] / fit.base.n : 0;
+        const r = fit.reg[rb], c = fit.cell[rb][sb];
+        const pReg = sh(r[e], r.n, pBase);
+        out[e] = sh(c[e], c.n, pReg);
+        out[e + 'Base'] = pBase;
+      }
+      out.nCell = fit.cell[rb][sb].n;
+      out.nReg = fit.reg[rb].n;
+      return out;
+    }
+
+    function moveStats(moves, M) {
+      if (moves.length < 150) return null;
+      const fit = fitMoves(moves, M);
+      // Validación: calibrar con el 70% inicial, evaluar en el 30% final (separados por M velas)
+      const split = Math.floor(moves.length * 0.7);
+      const train = moves.slice(0, split);
+      const test = moves.slice(split).filter(m => m.t > train[train.length - 1].t + M);
+      let oos = null;
+      if (test.length >= 50) {
+        const ft = fitMoves(train, M);
+        const sk = {};
+        for (const e of ['up', 'dn']) {
+          let br = 0, bb = 0, ev = 0;
+          const pb = ft.base.n ? ft.base[e] / ft.base.n : 0;
+          for (const m of test) {
+            const y = m[e] ? 1 : 0;
+            br += (predictMove(ft, m.rb, m.sb)[e] - y) ** 2;
+            bb += (pb - y) ** 2;
+            ev += y;
+          }
+          sk[e] = ev >= ANALOG.minEvents && bb > 0 ? 1 - br / bb : null;
+        }
+        oos = { n: test.length, skillUp: sk.up, skillDn: sk.dn };
+      }
+      return { fit, oos, M, pct: MOVE.pct, n: moves.length, nEff: Math.max(1, Math.round(moves.length / M)) };
+    }
+
+    // ---------------- Casos análogos: ¿la situación actual se parece a las previas a un salto? ----------------
+    const ANALOG = {
+      k: 15,              // episodios más parecidos a considerar
+      prior: 5,           // suavizado: equivale a 5 episodios con la tasa general
+      minEvents: 8,       // saltos mínimos en la validación para informar un skill
+      show: 5,            // casos mostrados en pantalla
+      // peso de cada componente de la huella (en el mismo orden que analogFeatures)
+      w: [2.0, 1.0, 1.2, 1.0, 0.8, 1.0, 0.6, 0.6, 0.5, 0.6, 0.8, 0.8],
+      names: ['volatilidad (ATR%)', 'percentil de volatilidad', 'compresión del rango', 'impulso', 'volumen', 'RSI',
+              'distancia al VWAP', 'MACD', 'tendencia mayor', 'posición en el rango',
+              'presión compradora (5 velas)', 'CVD (20 velas)']
+    };
+
+    function flowBuy5(kl, t) {
+      let b = 0, v = 0;
+      for (let j = t - 4; j <= t; j++) if (kl[j].buy != null) { b += kl[j].buy; v += kl[j].volume; }
+      return v > 0 ? b / v : 0.5;
+    }
+    function flowCvd20(kl, ser, t) {
+      if (!ser.cvd || ser.cvd[t] == null || ser.cvd[t - 20] == null) return 0;
+      let q = 0;
+      for (let j = t - 19; j <= t; j++) q += kl[j].volume * kl[j].close;
+      return q > 0 ? clamp((ser.cvd[t] - ser.cvd[t - 20]) / q, -1, 1) : 0;
+    }
+
+    // Huella de la vela t: solo usa información disponible al cierre de t
+    function analogFeatures(kl, ser, t, rank) {
+      const atr = ser.atr[t], rsi = ser.rsi[t];
+      if (!atr || rsi == null || t < 20) return null;
+      const c = kl[t].close;
+      let hi = -Infinity, lo = Infinity;
+      for (let j = t - 19; j <= t; j++) { if (kl[j].high > hi) hi = kl[j].high; if (kl[j].low < lo) lo = kl[j].low; }
+      let v = 0, vn = 0;
+      for (let j = t - 4; j <= t; j++) if (ser.relVol[j] != null) { v += ser.relVol[j]; vn++; }
+      const vw = ser.vwap[t];
+      return [
+        Math.log(atr / c),                                   // tamaño típico de las velas (clave para un 5%)
+        rank == null ? 0.5 : rank / 100,                     // volatilidad relativa a su propio historial
+        (hi - lo) / atr,                                     // rango de 20 velas en ATR: bajo = compresión
+        (c / kl[t - 20].close - 1) / (atr / c) / Math.sqrt(20),  // impulso normalizado
+        Math.log(Math.max(vn ? v / vn : 1, 0.05)),           // volumen relativo de las últimas 5 velas
+        rsi / 100,
+        vw ? clamp((c - vw) / atr, -4, 4) : 0,
+        ser.hist[t] != null ? clamp(ser.hist[t] / atr, -2, 2) : 0,
+        ser.htf[t] || 0,
+        (c - lo) / ((hi - lo) || 1),                         // dónde está el precio dentro del rango
+        flowBuy5(kl, t),                                     // parte de compras agresivas, últimas 5 velas
+        flowCvd20(kl, ser, t)                                // dirección del flujo agresivo, últimas 20 velas
+      ];
+    }
+
+    function featureScale(rows) {
+      const d = rows[0].length, mean = new Array(d).fill(0), sd = new Array(d).fill(0);
+      for (const r of rows) for (let k = 0; k < d; k++) mean[k] += r[k] / rows.length;
+      for (const r of rows) for (let k = 0; k < d; k++) sd[k] += (r[k] - mean[k]) ** 2 / rows.length;
+      return { mean, sd: sd.map(x => Math.sqrt(x) || 1) };
+    }
+
+    function analogDist(a, b, sc) {
+      let s = 0;
+      for (let k = 0; k < a.length; k++) { const z = (a[k] - b[k]) / sc.sd[k]; s += ANALOG.w[k] * z * z; }
+      return Math.sqrt(s);
+    }
+
+    // Busca los episodios más parecidos (sin tomar dos velas del mismo episodio) y cuenta qué pasó después
+    function findAnalogs(cands, vec, sc, M, kWanted) {
+      const K_EP = kWanted || ANALOG.k;
+      if (!vec || cands.length < 50) return null;
+      const ds = cands.map(m => ({ m, d: analogDist(vec, m.f, sc) })).sort((a, b) => a.d - b.d);
+      const dMed = ds[Math.floor(ds.length / 2)].d || 1;
+      const chosen = [];
+      for (const x of ds) {
+        if (chosen.every(c => Math.abs(c.m.t - x.m.t) >= M / 2)) chosen.push(x);
+        if (chosen.length >= K_EP) break;
+      }
+      let bu = 0, bd = 0;
+      for (const m of cands) { if (m.up) bu++; if (m.dn) bd++; }
+      const baseUp = bu / cands.length, baseDn = bd / cands.length;
+      const ups = chosen.filter(c => c.m.up).length, dns = chosen.filter(c => c.m.dn).length;
+      const k = chosen.length;
+      return {
+        k, ups, dns, baseUp, baseDn,
+        pUp: (ups + ANALOG.prior * baseUp) / (k + ANALOG.prior),
+        pDn: (dns + ANALOG.prior * baseDn) / (k + ANALOG.prior),
+        cases: chosen.slice(0, ANALOG.show).map(c => ({ ...c.m, f: undefined, sim: clamp(1 - c.d / dMed, 0, 1) })),
+        simAvg: chosen.reduce((a, c) => a + clamp(1 - c.d / dMed, 0, 1), 0) / (k || 1)
+      };
+    }
+
+    // Arma el modelo con todas las muestras y lo valida: busca solo en el 70% inicial y prueba en el 30% final
+    function buildAnalog(moves, M) {
+      const rows = moves.filter(m => m.f);
+      if (rows.length < 200) return null;
+      const scale = featureScale(rows.map(m => m.f));
+      const split = Math.floor(rows.length * 0.7);
+      const train = rows.slice(0, split);
+      const trainEnd = train[train.length - 1].t;
+      const step = Math.max(1, Math.floor(M / 4));
+      const test = rows.filter(m => m.t > trainEnd + M).filter((_, i) => i % step === 0);
+      let oos = null;
+      if (test.length >= 20) {
+        const scTr = featureScale(train.map(m => m.f));
+        let bu = 0, bd = 0, ru = 0, rd = 0, n = 0, evUp = 0, evDn = 0;
+        for (const m of test) {
+          const a = findAnalogs(train, m.f, scTr, M);
+          if (!a) continue;
+          const yu = m.up ? 1 : 0, yd = m.dn ? 1 : 0;
+          bu += (a.pUp - yu) ** 2; ru += (a.baseUp - yu) ** 2;
+          bd += (a.pDn - yd) ** 2; rd += (a.baseDn - yd) ** 2;
+          evUp += yu; evDn += yd; n++;
+        }
+        // Con muy pocos saltos en la validación el skill no significa nada: se informa como null
+        if (n >= 20) oos = {
+          n, evUp, evDn,
+          skillUp: evUp >= ANALOG.minEvents && ru > 0 ? 1 - bu / ru : null,
+          skillDn: evDn >= ANALOG.minEvents && rd > 0 ? 1 - bd / rd : null
+        };
+      }
+      return { rows, scale, M, oos };
+    }
+
+    // ---------------- FVG (Fair Value Gaps / huecos de valor) ----------------
+    // Patrón de 3 velas: alcista si el mínimo de la vela i supera el máximo de la vela i-2;
+    // bajista si el máximo de la vela i queda por debajo del mínimo de la vela i-2.
+    const FVG = {
+      minAtr: 0.2,        // tamaño mínimo del hueco en ATR (descarta huecos microscópicos)
+      lookback: 300,      // huecos de las últimas 300 velas
+      fillWinMult: 4,     // ventana para medir si se llenan: 4 × horizonte
+      maxDraw: 8          // máximo de huecos dibujados por gráfico
+    };
+
+    function findFVGs(kl, atr, fromIdx, lastIdx) {
+      const out = [];
+      for (let i = Math.max(2, fromIdx); i <= lastIdx; i++) {
+        const a = atr[i] || atr[i - 1];
+        if (!a) continue;
+        if (kl[i].low > kl[i - 2].high && kl[i].low - kl[i - 2].high >= FVG.minAtr * a) {
+          out.push({ i, type: 1, top: kl[i].low, bot: kl[i - 2].high });
+        } else if (kl[i].high < kl[i - 2].low && kl[i - 2].low - kl[i].high >= FVG.minAtr * a) {
+          out.push({ i, type: -1, top: kl[i - 2].low, bot: kl[i].high });
+        }
+      }
+      return out;
+    }
+
+    // Cuánto se llenó un hueco hasta la vela "upto": 0 = intacto, 1 = cerrado.
+    // Un hueco alcista se llena cuando el precio baja dentro de él; uno bajista, cuando sube.
+    function trackFVG(g, kl, upto) {
+      const h = g.top - g.bot;
+      let fill = 0, ceAt = null, filledAt = null;
+      for (let j = g.i + 1; j <= upto; j++) {
+        const f = g.type > 0 ? (g.top - kl[j].low) / h : (kl[j].high - g.bot) / h;
+        if (f > fill) {
+          fill = f;
+          if (ceAt == null && fill >= 0.5) ceAt = j;
+          if (fill >= 1) { filledAt = j; break; }
+        }
+      }
+      return { fill: clamp(fill, 0, 1), ceAt, filledAt };
+    }
+
+    // Huecos todavía abiertos en vivo, con la parte que falta llenar
+    function openFVGs(kl, atr, lastIdx) {
+      const gaps = findFVGs(kl, atr, lastIdx - FVG.lookback, lastIdx - 1);   // creados con velas cerradas
+      const open = [];
+      for (const g of gaps) {
+        const tr = trackFVG(g, kl, lastIdx);
+        if (tr.filledAt != null) continue;
+        const h = g.top - g.bot;
+        const remTop = g.type > 0 ? g.top - tr.fill * h : g.top;
+        const remBot = g.type > 0 ? g.bot : g.bot + tr.fill * h;
+        open.push({ ...g, fill: tr.fill, remTop, remBot, mid: (g.top + g.bot) / 2, age: lastIdx - g.i });
+      }
+      return open;
+    }
+
+    // Estadística histórica: qué porcentaje de huecos llega al 50% (CE) y al 100% dentro de la ventana
+    function fvgFillStats(kl, atr, warm, last, win) {
+      const gaps = findFVGs(kl, atr, warm, last - win);
+      if (gaps.length < 10) return null;
+      let ce = 0, full = 0, barsCe = 0;
+      for (const g of gaps) {
+        const tr = trackFVG(g, kl, g.i + win);
+        if (tr.ceAt != null) { ce++; barsCe += tr.ceAt - g.i; }
+        if (tr.filledAt != null) full++;
+      }
+      return { n: gaps.length, ce: ce / gaps.length, full: full / gaps.length, barsCe: ce ? barsCe / ce : null, win };
+    }
+
+    // ---------------- Libro de órdenes por tramos ----------------
+    const BOOK = {
+      bucketPct: 0.5,     // ancho de cada tramo
+      maxBuckets: 10,     // hasta ±5%
+      snaps: 6,           // lecturas recordadas por par
+      minSnaps: 3,        // lecturas mínimas para confirmar un muro
+      minRatio: 2,        // un muro tiene que tener ≥2× la mediana de los tramos
+      minPresence: 0.6,   // y destacarse en ≥60% de las lecturas
+      nearPct: 1,         // la presión del libro se mide dentro de ±1%
+      maxAgeMs: 180000,   // lecturas de más de 3 minutos se descartan
+      minDistPct: 0.5     // un muro tiene que estar a más de 0,5% del precio actual
+    };
+
+    // Los tramos de 0,5% están fijos en precio absoluto (escala logarítmica desde un "ancla" por par):
+    // el tramo k cubre [ancla·(1+0,5%)^k, ancla·(1+0,5%)^(k+1)). Así una misma zona de precio conserva su
+    // tramo aunque el precio se mueva entre lecturas.
+    const BOOK_L = Math.log(1 + BOOK.bucketPct / 100);
+    const bookK = (p, anchor) => Math.floor(Math.log(p / anchor) / BOOK_L);
+    const bookP = (k, anchor) => anchor * Math.exp(k * BOOK_L);
+
+    // Resume una lectura del libro: USDT por tramo absoluto, a cada lado, y qué tramos cubre por completo
+    function bookSnapshot(depth, now, anchor) {
+      if (!depth || !Array.isArray(depth.bids) || !Array.isArray(depth.asks)) return null;
+      const bids = depth.bids.map(l => [+l[0], +l[1]]).filter(l => l[0] > 0 && l[1] > 0);
+      const asks = depth.asks.map(l => [+l[0], +l[1]]).filter(l => l[0] > 0 && l[1] > 0);
+      if (!bids.length || !asks.length) return null;
+      const mid = (bids[0][0] + asks[0][0]) / 2;
+      const A = anchor || mid;
+      const side = (levels, sgn) => {
+        const b = {};
+        let far = mid, near = 0;
+        for (const [p, q] of levels) {
+          const d = sgn * (p / mid - 1) * 100;
+          if (d < 0 || d > BOOK.maxBuckets * BOOK.bucketPct) continue;
+          if (sgn > 0 ? p > far : p < far) far = p;
+          if (d <= BOOK.nearPct) near += p * q;
+          const k = bookK(p, A);
+          const c = b[k] || (b[k] = { n: 0, pv: 0 });
+          c.n += p * q; c.pv += p * p * q;
+        }
+        // Tramos cubiertos por completo por esta lectura (entre el precio y el nivel más lejano visible)
+        const kMid = bookK(mid, A), kFar = bookK(far, A);
+        const kFrom = sgn > 0 ? kMid + 1 : kFar + 1, kTo = sgn > 0 ? kFar - 1 : kMid - 1;
+        const full = [];
+        for (let k = kFrom; k <= kTo; k++) full.push(b[k] ? b[k].n : 0);
+        return { b, kFrom, kTo, cover: Math.abs(far / mid - 1) * 100, near, med: median(full) };
+      };
+      const ask = side(asks, 1), bid = side(bids, -1);
+      const tot = ask.near + bid.near;
+      return { t: now, mid, anchor: A, ask, bid, obi: tot > 0 ? (bid.near - ask.near) / tot : 0 };
+    }
+
+    const median = arr => {
+      if (!arr.length) return 0;
+      const s = arr.slice().sort((a, b) => a - b), m = Math.floor(s.length / 2);
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+
+    // Combina las lecturas recientes y detecta muros persistentes respecto del precio ACTUAL
+    function analyzeBook(snaps, price, now) {
+      if (!snaps || !snaps.length || !(price > 0)) return null;
+      const fresh = snaps.filter(x => now - x.t <= BOOK.maxAgeMs);
+      const last = snaps[snaps.length - 1];
+      const out = { t: last.t, obi: last.obi, price, nSnaps: fresh.length, stale: !fresh.length, sides: {} };
+      const A = last.anchor;
+      const kNow = bookK(price, A);
+      for (const s of ['ask', 'bid']) {
+        const sgn = s === 'ask' ? 1 : -1;
+        // Histograma: los 3 tramos más cercanos al precio actual, según la última lectura
+        const buckets = [];
+        for (let j = 0; j < 3; j++) {
+          const k = sgn > 0 ? kNow + 1 + j : kNow - 1 - j;
+          const lo = bookP(k, A), hi = bookP(k + 1, A);
+          buckets.push({ k, lo, hi, notional: last[s].b[k] ? last[s].b[k].n : 0,
+                         partial: k < last[s].kFrom || k > last[s].kTo,
+                         from: Math.abs((sgn > 0 ? lo : hi) / price - 1) * 100, to: Math.abs((sgn > 0 ? hi : lo) / price - 1) * 100 });
+        }
+        let wall = null, reason = null;
+        if (!fresh.length) reason = 'viejo';
+        else if (last[s].cover < BOOK.minDistPct + BOOK.bucketPct) reason = 'cobertura';
+        else if (fresh.length < BOOK.minSnaps) reason = 'confirmando';
+        else {
+          // Candidatos: tramos del lado correcto del precio actual, a más de 0,5% y dentro de ±5%
+          const ks = new Set();
+          fresh.forEach(x => { for (let k = x[s].kFrom; k <= x[s].kTo; k++) ks.add(k); });
+          const medAvg = fresh.reduce((a, x) => a + x[s].med, 0) / fresh.length;
+          let best = null;
+          for (const k of ks) {
+            const lo = bookP(k, A), hi = bookP(k + 1, A);
+            const dNear = sgn > 0 ? (lo / price - 1) * 100 : (1 - hi / price) * 100;
+            if (dNear < BOOK.minDistPct || dNear > BOOK.maxBuckets * BOOK.bucketPct) continue;
+            const cov = fresh.filter(x => k >= x[s].kFrom && k <= x[s].kTo);
+            if (cov.length < BOOK.minSnaps) continue;
+            let n = 0, pv = 0, hits = 0;
+            for (const x of cov) {
+              const c = x[s].b[k];
+              const v = c ? c.n : 0;
+              n += v; if (c) pv += c.pv;
+              if (x[s].med > 0 && v >= BOOK.minRatio * x[s].med) hits++;
+            }
+            const avg = n / cov.length, presence = hits / cov.length;
+            if (medAvg <= 0 || avg < BOOK.minRatio * medAvg || presence < BOOK.minPresence) continue;
+            if (!best || avg > best.notional) best = { k, lo, hi, notional: avg, price: n > 0 ? pv / n : (lo + hi) / 2, ratio: avg / medAvg, presence };
+          }
+          if (best) wall = { ...best, distPct: (best.price / price - 1) * 100 };
+          else reason = 'ninguno';
+        }
+        out.sides[s] = { cover: last[s].cover, buckets, wall, reason };
+      }
+      return out;
+    }
+    // === CORE END ===
+
+    // ============================================================
+    // ESTADO GLOBAL
+    // ============================================================
+    let currentTimeframe = '15m';
+    let refreshIntervalSeconds = 30;
+    let countdownSeconds = 30;
+    let allBinanceSymbols = [];
+    let userPortfolio = new Set();
+    let state = {};
+    let btcRef = null;                 // BTC de referencia si no está en el portafolio
+    let activeGridSymbols = [];
+    let ws = null;
+    let depthTimeout = null;
+    let wsReconnectTimeout = null;
+    let tradeWs = null, tradeWsKey = '', tradeWsTimeout = null;
+    let timerInterval = null;
+    let analysisGen = 0;               // descarta tareas de análisis anteriores
+    const dirty = new Set();           // pares con cambios pendientes de recalcular
+    const needBt = new Set();          // pares que necesitan rehacer el backtest (vela nueva)
+    let btSelected = null;
+
+    // Período del RSI: '9', '14' o 'auto'. Por defecto 9.
+    let rsiMode = '9';
+    try { const m = localStorage.getItem('crypto_rsi_mode'); if (['9', '14', 'auto'].includes(m)) rsiMode = m; } catch (e) {}
+
+    // Cambiar el RSI no requiere recalcular el backtest: los dos períodos ya están medidos
+    function changeRsiMode(mode) {
+      rsiMode = mode;
+      try { localStorage.setItem('crypto_rsi_mode', mode); } catch (e) {}
+      const now = Date.now();
+      Object.values(state).forEach(item => {
+        if (item.btBy) applyRsiChoice(item, mode);
+        else { item.rsiP = mode === 'auto' ? 14 : +mode; if (item.ser) item.ser.rsi = item.ser.rsiBy[item.rsiP]; }
+        try { computeLive(item, currentTimeframe, now); } catch (e) {}
+        updateTableRow(item.symbol);
+      });
+      reorderAndRenderGrid();
+      activeGridSymbols.forEach(updateSingleCard);
+      if (document.getElementById('bt-overlay').classList.contains('active')) renderBacktestModal();
+    }
+
+    // ============================================================
+    // SELECCIÓN DE GRÁFICOS (tildes del resumen)
+    // ============================================================
+    let gridSelection = new Set();
+    try {
+      const s = JSON.parse(localStorage.getItem('crypto_grid_selection') || '[]');
+      if (Array.isArray(s)) gridSelection = new Set(s);
+    } catch (e) {}
+
+    function saveSelection() {
+      try { localStorage.setItem('crypto_grid_selection', JSON.stringify(Array.from(gridSelection))); } catch (e) {}
+    }
+
+    // Pares tildados que siguen en el portafolio, en el orden del portafolio
+    function selectedSymbols() {
+      return Object.keys(state).filter(s => gridSelection.has(s));
+    }
+
+    function toggleSelect(sym, on) {
+      if (on) gridSelection.add(sym); else gridSelection.delete(sym);
+      saveSelection();
+      syncCheckboxes();
+      reorderAndRenderGrid();
+    }
+
+    function toggleAll(on) {
+      Object.keys(state).forEach(s => { if (on) gridSelection.add(s); else gridSelection.delete(s); });
+      saveSelection();
+      syncCheckboxes();
+      reorderAndRenderGrid();
+    }
+
+    function clearSelection() { toggleAll(false); }
+
+    function syncCheckboxes() {
+      const syms = Object.keys(state);
+      syms.forEach(s => {
+        const cb = document.getElementById(`sel-${s}`);
+        if (cb) cb.checked = gridSelection.has(s);
+        const tr = document.getElementById(`row-${s}`);
+        if (tr) tr.classList.toggle('checked', gridSelection.has(s));
+      });
+      const n = selectedSymbols().length;
+      const all = document.getElementById('sel-all');
+      if (all) {
+        all.checked = n > 0 && n === syms.length;
+        all.indeterminate = n > 0 && n < syms.length;
+      }
+    }
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const nextFrame = () => new Promise(r => setTimeout(r, 0));
+    const pct = (x, d = 1) => (x == null || !isFinite(x)) ? '—' : `${(x * 100).toFixed(d)}%`;
+    const fmtDate = t => new Date(t).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    function setStatus(txt) { document.getElementById('status-text').innerText = txt; }
+
+    // ============================================================
+    // CACHÉ DE VELAS (IndexedDB)
+    // ============================================================
+    const Cache = (() => {
+      let dbp = null;
+      function open() {
+        if (dbp) return dbp;
+        dbp = new Promise(res => {
+          try {
+            const r = indexedDB.open('screener_cripto_cache', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('klines');
+            r.onsuccess = () => res(r.result);
+            r.onerror = () => res(null);
+            r.onblocked = () => res(null);
+          } catch (e) { res(null); }
+        });
+        return dbp;
+      }
+      async function tx(mode, fn) {
+        const db = await open();
+        if (!db) return null;
+        return new Promise(res => {
+          try {
+            const t = db.transaction('klines', mode);
+            const rq = fn(t.objectStore('klines'));
+            rq.onsuccess = () => res(rq.result == null ? null : rq.result);
+            rq.onerror = () => res(null);
+          } catch (e) { res(null); }
+        });
+      }
+      return {
+        get: key => tx('readonly', s => s.get(key)),
+        set: (key, val) => tx('readwrite', s => s.put(val, key)),
+        clear: () => tx('readwrite', s => s.clear())
+      };
+    })();
+
+    const toCompact = bars => bars.map(b => [b.time, b.open, b.high, b.low, b.close, b.volume, b.quote, b.trades, b.buy]);
+    const fromCompact = arr => arr.map(a => ({ time: a[0], open: a[1], high: a[2], low: a[3], close: a[4], volume: a[5],
+                                              quote: a[6] ?? null, trades: a[7] ?? null, buy: a[8] ?? null }));
+
+    async function clearHistoryCache() {
+      await Cache.clear();
+      alert('Caché de velas borrada. Se volverá a descargar el historial.');
+      startAnalysis();
+    }
+
+    // ============================================================
+    // DESCARGA DE DATOS
+    // ============================================================
+    async function fetchJSON(url, tries = 3) {
+      for (let a = 0; a < tries; a++) {
+        const res = await fetch(url);
+        if (res.status === 429 || res.status === 418) {
+          const ra = parseInt(res.headers.get('Retry-After')) || 2;
+          await sleep(ra * 1000);
+          continue;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      }
+      throw new Error('Límite de peticiones de Binance alcanzado');
+    }
+
+    // Además de OHLCV: monto en USDT (7), cantidad de operaciones (8) y volumen de compra agresiva (9)
+    const parseKline = d => ({ time: d[0], open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5],
+                               quote: d[7] != null ? +d[7] : null, trades: d[8] != null ? +d[8] : null, buy: d[9] != null ? +d[9] : null });
+
+    async function fetchKlines(sym, interval, opts = {}) {
+      const limit = opts.limit || 1000;
+      let url = `https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${interval}&limit=${limit}`;
+      if (opts.startTime != null) url += `&startTime=${opts.startTime}`;
+      if (opts.endTime != null) url += `&endTime=${opts.endTime}`;
+      const data = await fetchJSON(url);
+      return Array.isArray(data) ? data.map(parseKline) : [];
+    }
+
+    // Une velas nuevas (ordenadas) al final, reemplazando las que se solapan
+    function mergeTail(bars, got) {
+      if (!got.length) return bars;
+      const t0 = got[0].time;
+      let cut = bars.length;
+      while (cut > 0 && bars[cut - 1].time >= t0) cut--;
+      return bars.slice(0, cut).concat(got);
+    }
+
+    // Carga historial con caché: pide solo lo nuevo hacia adelante y completa hacia atrás si falta
+    async function loadHistory(sym, interval, target) {
+      const key = `v2_${sym}_${interval}`;
+      const ms = TF_MS[interval];
+      const cached = await Cache.get(key);
+      let bars = cached && cached.b ? fromCompact(cached.b) : [];
+      let full = !!(cached && cached.full);
+
+      if (bars.length && (Date.now() - bars[bars.length - 1].time) / ms > 5000) { bars = []; full = false; }
+
+      if (bars.length) {
+        let start = bars[bars.length - 1].time;
+        for (let page = 0; page < 6; page++) {
+          const got = await fetchKlines(sym, interval, { startTime: start, limit: 1000 });
+          if (!got.length) break;
+          bars = mergeTail(bars, got);
+          if (got.length < 1000) break;
+          start = got[got.length - 1].time;
+        }
+      } else {
+        bars = await fetchKlines(sym, interval, { limit: Math.min(1000, target) });
+        if (bars.length < Math.min(1000, target)) full = true;   // el par no tiene más historia
+      }
+
+      let guard = 0;
+      while (!full && bars.length && bars.length < target && guard++ < Math.ceil(target / 1000) + 1) {
+        const want = Math.min(1000, target - bars.length);
+        const got = await fetchKlines(sym, interval, { endTime: bars[0].time - 1, limit: want });
+        if (got.length) bars = got.concat(bars);
+        if (got.length < want) { full = true; break; }
+      }
+
+      if (bars.length > CACHE_MAX) bars = bars.slice(-CACHE_MAX);
+      Cache.set(key, { b: toCompact(bars), full });
+      return bars;
+    }
+
+    function saveToCache(item, interval) {
+      if (!item.klines.length) return;
+      Cache.get(`v2_${item.symbol}_${interval}`).then(c => {
+        Cache.set(`v2_${item.symbol}_${interval}`, { b: toCompact(item.klines.slice(-CACHE_MAX)), full: !!(c && c.full) });
+      });
+    }
+
+    async function runPool(tasks, limit) {
+      let idx = 0;
+      const worker = async () => { while (idx < tasks.length) { const t = tasks[idx++]; await t(); } };
+      await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+    }
+
+    async function loadSymbol(item, tf, withAux) {
+      try {
+        item.klines = await loadHistory(item.symbol, tf, HIST_TARGET[tf]);
+        if (withAux) {
+          item.htfKlines = await loadHistory(item.symbol, HTF_OF[tf], 300);
+          if (tf !== '1d') item.dailyKlines = await loadHistory(item.symbol, '1d', 1000);   // ~3 años para niveles mayores
+        }
+      } catch (e) {
+        console.warn('Error cargando', item.symbol, e);
+        item.loadError = String(e.message || e);
+      }
+    }
+
+    // Refresca la temporalidad mayor y las diarias cuando quedan viejas
+    async function maybeRefreshAux(item, tf, gen) {
+      const now = Date.now();
+      const htfMs = TF_MS[HTF_OF[tf]];
+      const lastH = item.htfKlines[item.htfKlines.length - 1];
+      const lastD = item.dailyKlines[item.dailyKlines.length - 1];
+      try {
+        if (!lastH || now > lastH.time + 2 * htfMs) {
+          const h = await loadHistory(item.symbol, HTF_OF[tf], 300);
+          if (gen === analysisGen) item.htfKlines = h;
+        }
+        if (tf !== '1d' && (!lastD || lastD.time < dayStartUTC(now))) {   // empezó un día nuevo: cerrar la vela de ayer
+          const d = await loadHistory(item.symbol, '1d', 1000);
+          if (gen === analysisGen) item.dailyKlines = d;
+        }
+      } catch (e) { console.warn('Error refrescando auxiliares', item.symbol, e); }
+    }
+
+    function getBtcKlines() {
+      if (state.BTCUSDT) return state.BTCUSDT.klines;
+      return btcRef ? btcRef.klines : null;
+    }
+
+    // ============================================================
+    // INICIO Y CONTROLES
+    // ============================================================
+    async function init() {
+      loadSavedPortfolio();
+      await fetchAllBinanceSymbols();
+      renderPortfolioChips();
+      document.getElementById('sel-all').addEventListener('change', e => toggleAll(e.target.checked));
+      document.getElementById('rsi-mode').value = rsiMode;
+      try { if (localStorage.getItem('crypto_summary_collapsed') === '1') document.getElementById('dashboard-grid').classList.add('summary-collapsed'); } catch (e) {}
+      let resizeT = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeT);
+        resizeT = setTimeout(() => activeGridSymbols.forEach(s => state[s] && drawCanvasChart(state[s])), 150);
+      });
+      startCountdownTimer();
+      setInterval(flush, FLUSH_MS);
+      startAnalysis();
+    }
+
+    // Pliega o despliega el resumen lateral y redibuja los gráficos con el nuevo ancho
+    function toggleSummary(collapse) {
+      document.getElementById('dashboard-grid').classList.toggle('summary-collapsed', collapse);
+      try { localStorage.setItem('crypto_summary_collapsed', collapse ? '1' : '0'); } catch (e) {}
+      const redraw = () => activeGridSymbols.forEach(s => state[s] && drawCanvasChart(state[s]));
+      requestAnimationFrame(redraw);
+      setTimeout(redraw, 300);   // después de la transición
+    }
+
+    function changeRefreshInterval(val) {
+      refreshIntervalSeconds = parseInt(val);
+      countdownSeconds = refreshIntervalSeconds;
+      updateTimerBadge();
+    }
+
+    let lastUserScroll = 0, ignoreScrollUntil = 0;
+    const USER_IDLE_MS = 15000;
+    ['scroll', 'touchstart', 'wheel'].forEach(ev => window.addEventListener(ev, () => {
+      if (ev === 'scroll' && Date.now() < ignoreScrollUntil) return;   // scroll hecho por la página, no por el usuario
+      lastUserScroll = Date.now();
+    }, { passive: true }));
+
+    function pageScrollBy(dy) {
+      if (Math.abs(dy) < 1) return;
+      ignoreScrollUntil = Date.now() + 150;
+      window.scrollBy(0, dy);
+    }
+
+    // Ejecuta una actualización de la pantalla sin mover lo que el usuario está mirando: toma como
+    // referencia el primer bloque fijo visible (que no se reemplaza al actualizar) y lo mantiene en su lugar.
+    const ANCHOR_SEL = '#charts-grid .card > .card-header, #charts-grid .card > .metrics, #charts-grid .canvas-wrapper, ' +
+                       '#charts-grid .bt-foot, #charts-grid .side-top, #charts-grid .details-cols, #summary-panel';
+    function withScrollAnchor(fn) {
+      if (window.scrollY <= 0) return fn();
+      let anchor = null, top0 = 0;
+      for (const el of document.querySelectorAll(ANCHOR_SEL)) {
+        const r = el.getBoundingClientRect();
+        if (r.bottom > 0) { anchor = el; top0 = r.top; break; }
+      }
+      const out = fn();
+      if (anchor && anchor.isConnected) pageScrollBy(anchor.getBoundingClientRect().top - top0);
+      return out;
+    }
+
+    function startCountdownTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        countdownSeconds--;
+        if (countdownSeconds <= 0) {
+          // Si el usuario está haciendo scroll o tocando la pantalla, la rotación espera
+          if (Date.now() - lastUserScroll < USER_IDLE_MS) { countdownSeconds = 3; return; }
+          // Solo se reordena el resumen del portafolio: las tarjetas de gráficos mantienen su lugar
+          sortTable();
+          countdownSeconds = refreshIntervalSeconds;
+        }
+        updateTimerBadge();
+      }, 1000);
+    }
+
+    function updateTimerBadge() {
+      const el = document.getElementById('refresh-timer');
+      if (el) el.innerText = `Rotación en: ${countdownSeconds}s`;
+    }
+
+    function changeTimeframe(tf) {
+      if (currentTimeframe === tf) return;
+      currentTimeframe = tf;
+      document.querySelectorAll('.tf-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`tf-${tf}`).classList.add('active');
+      document.getElementById('grid-title').innerText = `Gráficos en Temporalidad: ${TF_LABEL[tf]}`;
+      startAnalysis();
+    }
+
+    // ============================================================
+    // PORTAFOLIO
+    // ============================================================
+    const validSymbol = s => typeof s === 'string' && /^[A-Z0-9]{2,30}$/.test(s);
+
+    function loadSavedPortfolio() {
+      let saved = null;
+      try { saved = localStorage.getItem('crypto_user_portfolio'); } catch (e) {}
+      userPortfolio = new Set(DEFAULT_PORTFOLIO);
+      if (saved) {
+        try {
+          const arr = JSON.parse(saved);
+          if (Array.isArray(arr)) userPortfolio = new Set(arr.map(s => String(s).toUpperCase()).filter(validSymbol));
+        } catch (e) {}
+      }
+      document.getElementById('selected-count').innerText = userPortfolio.size;
+    }
+
+    function savePortfolio() {
+      try { localStorage.setItem('crypto_user_portfolio', JSON.stringify(Array.from(userPortfolio))); } catch (e) {}
+      document.getElementById('selected-count').innerText = userPortfolio.size;
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(Array.from(userPortfolio), null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `portafolio_cripto_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const arr = JSON.parse(e.target.result);
+          if (Array.isArray(arr)) {
+            userPortfolio = new Set(arr.map(s => String(s).toUpperCase()).filter(validSymbol));
+            savePortfolio();
+            renderPortfolioChips();
+            alert("¡Portafolio cargado con éxito!");
+          } else alert("Error: Formato JSON no válido.");
+        } catch (err) { alert("Error al leer el archivo JSON."); }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    async function fetchAllBinanceSymbols() {
+      try {
+        const data = await fetchJSON('https://api.binance.com/api/v3/exchangeInfo');
+        allBinanceSymbols = data.symbols
+          .filter(s => s.quoteAsset === 'USDT' && s.status === 'TRADING')
+          .map(s => s.symbol);
+      } catch (e) { console.error("Error al conectar con Binance API:", e); }
+    }
+
+    function handleSearch(query) {
+      const box = document.getElementById('search-results');
+      const q = query.trim().toUpperCase();
+      if (!q) { box.classList.remove('active'); return; }
+      const matches = allBinanceSymbols.filter(s => s.includes(q)).slice(0, 10);
+      if (!matches.length) { box.classList.remove('active'); return; }
+      box.innerHTML = '';
+      matches.forEach(sym => {
+        const div = document.createElement('div');
+        div.className = 'search-item';
+        div.innerHTML = `<span><strong>${sym}</strong></span> <span>${userPortfolio.has(sym) ? '✔ En lista' : '+ Agregar'}</span>`;
+        div.onclick = () => {
+          userPortfolio.add(sym);
+          savePortfolio();
+          renderPortfolioChips();
+          document.getElementById('search-input').value = '';
+          box.classList.remove('active');
+        };
+        box.appendChild(div);
+      });
+      box.classList.add('active');
+    }
+
+    function renderPortfolioChips() {
+      const container = document.getElementById('portfolio-chips');
+      container.innerHTML = '';
+      userPortfolio.forEach(sym => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        const label = document.createElement('span');
+        label.textContent = sym;
+        const remove = document.createElement('span');
+        remove.className = 'chip-remove';
+        remove.textContent = '✕';
+        remove.onclick = () => { userPortfolio.delete(sym); savePortfolio(); renderPortfolioChips(); };
+        chip.appendChild(label);
+        chip.appendChild(remove);
+        container.appendChild(chip);
+      });
+    }
+
+    function resetDefaultPortfolio() {
+      userPortfolio = new Set(DEFAULT_PORTFOLIO);
+      savePortfolio();
+      renderPortfolioChips();
+    }
+
+    function openModal() { document.getElementById('modal-overlay').classList.add('active'); }
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('active');
+      document.getElementById('search-results').classList.remove('active');
+    }
+    function applySelection() { closeModal(); startAnalysis(); }
+
+    // ============================================================
+    // ANÁLISIS
+    // ============================================================
+    function stopLiveTasks() {
+      if (ws) { const old = ws; ws = null; old.close(); }
+      if (tradeWs) { const old = tradeWs; tradeWs = null; old.close(); }
+      tradeWsKey = '';
+      if (tradeWsTimeout) { clearTimeout(tradeWsTimeout); tradeWsTimeout = null; }
+      if (depthTimeout) { clearTimeout(depthTimeout); depthTimeout = null; }
+      if (wsReconnectTimeout) { clearTimeout(wsReconnectTimeout); wsReconnectTimeout = null; }
+      document.getElementById('status-dot').classList.remove('connected');
+    }
+
+    async function startAnalysis() {
+      const gen = ++analysisGen;
+      stopLiveTasks();
+      state = {};
+      btcRef = null;
+      activeGridSymbols = [];
+      dirty.clear();
+      needBt.clear();
+
+      const list = Array.from(userPortfolio);
+      if (!list.length) {
+        setStatus("Portafolio vacío");
+        document.getElementById('charts-grid').innerHTML = '';
+        document.getElementById('table-body').innerHTML = '';
+        return;
+      }
+      list.forEach(sym => { state[sym] = newItem(sym); state[sym].rsiP = rsiMode === 'auto' ? 14 : +rsiMode; });
+      document.getElementById('charts-grid').innerHTML = '<div class="empty-msg">Cargando historial...</div>';
+      document.getElementById('table-body').innerHTML = '';
+
+      const tf = currentTimeframe;
+      const jobs = list.map(sym => () => loadSymbol(state[sym], tf, true));
+      if (!state.BTCUSDT) {
+        btcRef = newItem('BTCUSDT');
+        const ref = btcRef;
+        jobs.unshift(() => loadSymbol(ref, tf, false));
+      }
+
+      let done = 0;
+      setStatus(`Cargando historial 0/${jobs.length}...`);
+      await runPool(jobs.map(job => async () => {
+        if (gen !== analysisGen) return;
+        await job();
+        done++;
+        if (gen === analysisGen) setStatus(`Cargando historial ${done}/${jobs.length}...`);
+      }), FETCH_CONCURRENCY);
+      if (gen !== analysisGen) return;
+
+      const btcKl = getBtcKlines();
+      let k = 0;
+      for (const sym of list) {
+        setStatus(`Backtest ${++k}/${list.length}...`);
+        await nextFrame();
+        if (gen !== analysisGen) return;
+        const it = state[sym];
+        try {
+          computeSeries(it, tf, btcKl);
+          runBacktests(it, tf, rsiMode);
+          computeLive(it, tf, Date.now());
+        } catch (e) { console.warn('Error de cálculo en', sym, e); }
+      }
+
+      setStatus(`Datos cargados (${tf})`);
+      renderTableStructure();
+      connectWebSocket(list, gen);
+      startDepthPolling(list, gen);
+      reorderAndRenderGrid();
+      if (document.getElementById('bt-overlay').classList.contains('active')) renderBacktestModal();
+    }
+
+    // Aplica una vela del stream; devuelve true si empezó una vela nueva
+    function applyCandle(item, c) {
+      const kl = item.klines;
+      const last = kl[kl.length - 1];
+      if (last && last.time === c.time) { kl[kl.length - 1] = c; return false; }
+      if (last && c.time < last.time) return false;
+      kl.push(c);
+      if (kl.length > CACHE_MAX) kl.shift();
+      return true;
+    }
+
+    function connectWebSocket(list, gen) {
+      if (gen !== analysisGen) return;
+      const tf = currentTimeframe;
+      const syms = btcRef ? list.concat('BTCUSDT') : list;
+      const streams = syms.map(s => `${s.toLowerCase()}@kline_${tf}`).join('/');
+      const socket = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
+      ws = socket;
+
+      socket.onopen = () => {
+        if (ws !== socket) return;
+        document.getElementById('status-dot').classList.add('connected');
+        setStatus(`En vivo (${tf})`);
+      };
+
+      socket.onmessage = (event) => {
+        if (ws !== socket) return;
+        let msg;
+        try { msg = JSON.parse(event.data); } catch (e) { return; }
+        if (!msg.data || !msg.data.k) return;
+        const k = msg.data.k;
+        const c = { time: k.t, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v, quote: k.q != null ? +k.q : null, trades: k.n != null ? +k.n : null, buy: k.V != null ? +k.V : null };
+
+        if (k.s === 'BTCUSDT' && !state.BTCUSDT && btcRef) {
+          if (applyCandle(btcRef, c)) saveToCache(btcRef, tf);
+          return;
+        }
+        const item = state[k.s];
+        if (!item) return;
+        const isNew = applyCandle(item, c);
+        item.price = c.close;
+        dirty.add(k.s);
+        if (isNew) {
+          needBt.add(k.s);
+          saveToCache(item, tf);
+          maybeRefreshAux(item, tf, gen);
+        }
+      };
+
+      socket.onclose = () => {
+        if (ws !== socket) return;
+        ws = null;
+        document.getElementById('status-dot').classList.remove('connected');
+        setStatus('Desconectado — reconectando...');
+        wsReconnectTimeout = setTimeout(() => connectWebSocket(list, gen), WS_RECONNECT_MS);
+      };
+      socket.onerror = () => {};
+    }
+
+    // Guarda una operación (aggTrade) en el par: m = true significa que el comprador era el pasivo → fue una VENTA a mercado
+    function pushTrade(item, a) {
+      const p = +a.p, q = +a.q;
+      if (!(p > 0 && q > 0)) return;
+      item.trades.push({ T: a.T, p, usd: p * q, buy: !a.m });
+      if (item.trades.length > TRADES.cap * 1.2) item.trades.splice(0, item.trades.length - TRADES.cap);
+    }
+
+    // Escucha las operaciones individuales solo de los pares que están en pantalla
+    function syncTradeStream() {
+      const gen = analysisGen;
+      const syms = activeGridSymbols.filter(s => state[s]);
+      const key = syms.join(',');
+      if (key === tradeWsKey && tradeWs) return;
+      if (tradeWs) { const old = tradeWs; tradeWs = null; old.close(); }
+      if (tradeWsTimeout) { clearTimeout(tradeWsTimeout); tradeWsTimeout = null; }
+      tradeWsKey = key;
+      if (!syms.length) return;
+      // Carga inicial: las últimas 1000 operaciones de cada par que todavía no tiene datos
+      syms.forEach(async sym => {
+        const item = state[sym];
+        if (!item || item.trades.length) return;
+        try {
+          const arr = await fetchJSON(`https://api.binance.com/api/v3/aggTrades?symbol=${sym}&limit=1000`, 1);
+          if (gen !== analysisGen || !state[sym] || !Array.isArray(arr)) return;
+          const seen = new Set(item.trades.map(t => t.T + ':' + t.usd));
+          arr.forEach(a => { if (!seen.has(a.T + ':' + (+a.p * +a.q))) pushTrade(item, a); });
+          item.trades.sort((x, y) => x.T - y.T);
+          dirty.add(sym);
+        } catch (e) { console.warn('Error cargando operaciones de', sym, e); }
+      });
+      const socket = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${syms.map(s => s.toLowerCase() + '@aggTrade').join('/')}`);
+      tradeWs = socket;
+      socket.onmessage = ev => {
+        if (tradeWs !== socket) return;
+        let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        const a = msg.data;
+        if (!a || a.e !== 'aggTrade' || !state[a.s]) return;
+        pushTrade(state[a.s], a);
+        dirty.add(a.s);
+      };
+      socket.onclose = () => {
+        if (tradeWs !== socket) return;
+        tradeWs = null; tradeWsKey = '';
+        if (gen === analysisGen) tradeWsTimeout = setTimeout(syncTradeStream, WS_RECONNECT_MS);
+      };
+      socket.onerror = () => {};
+    }
+
+    // Recalcula los muros contra el precio en vivo (se llama en cada lectura y en cada recálculo)
+    function refreshBook(item) {
+      item.book = analyzeBook(item.bookSnaps, item.price, Date.now());
+      if (!item.book) return;
+      item.obi = item.book.stale ? 0 : item.book.obi;
+      item.askWall = item.book.sides.ask.wall ? item.book.sides.ask.wall.price : 0;
+      item.bidWall = item.book.sides.bid.wall ? item.book.sides.bid.wall.price : 0;
+    }
+
+    function startDepthPolling(list, gen) {
+      // Un par por vez, en rueda. Los pares en pantalla van primero en cada vuelta.
+      // Rueda alternada: un par en pantalla, un par cualquiera. Los visibles se leen el doble de seguido.
+      let queue = [], visQueue = [], tick = 0;
+      const next = async () => {
+        if (gen !== analysisGen) return;
+        const vis = activeGridSymbols.filter(s => list.includes(s));
+        if (!queue.length) queue = vis.concat(list.filter(s => !vis.includes(s)));
+        if (!visQueue.length) visQueue = vis.slice();
+        const sym = (tick++ % 2 === 0 && visQueue.length) ? visQueue.shift() : queue.shift();
+        try {
+          const depth = await fetchJSON(`https://api.binance.com/api/v3/depth?symbol=${sym}&limit=${DEPTH_LIMIT}`, 2);
+          const item = state[sym];
+          const snap = item ? bookSnapshot(depth, Date.now(), item.bookAnchor) : null;
+          if (gen === analysisGen && item && snap) {
+            if (!item.bookAnchor) item.bookAnchor = snap.anchor;
+            item.bookSnaps.push(snap);
+            if (item.bookSnaps.length > BOOK.snaps) item.bookSnaps.shift();
+            refreshBook(item);
+            dirty.add(sym);
+          }
+        } catch (e) { console.warn("Error de profundidad en", sym, e); }
+        if (gen === analysisGen) depthTimeout = setTimeout(next, DEPTH_GAP_MS);
+      };
+      depthTimeout = setTimeout(next, 500);
+    }
+
+    // Recalcula los pares con cambios (agrupa los ticks para no recalcular cientos de veces por segundo)
+    function flush() {
+      if (!dirty.size) return;
+      const tf = currentTimeframe, now = Date.now(), btcKl = getBtcKlines();
+      let budget = MAX_BT_PER_FLUSH, btRan = false;
+      withScrollAnchor(() => {
+      for (const sym of Array.from(dirty)) {
+        dirty.delete(sym);
+        const item = state[sym];
+        if (!item) continue;
+        try {
+          computeSeries(item, tf, btcKl);
+          if (needBt.has(sym) && budget > 0) {
+            runBacktests(item, tf, rsiMode);
+            needBt.delete(sym);
+            budget--;
+            btRan = true;
+          }
+          if (item.bookSnaps.length) refreshBook(item);
+          if (activeGridSymbols.includes(sym)) item.tradeStats = analyzeTrades(item.trades, now);
+          computeLive(item, tf, now);
+        } catch (e) { console.warn('Error de cálculo en', sym, e); }
+        updateTableRow(sym);
+        if (activeGridSymbols.includes(sym)) updateSingleCard(sym);
+      }
+      });
+      needBt.forEach(s => dirty.add(s));   // los backtests pendientes van en el próximo ciclo
+      if (btRan && document.getElementById('bt-overlay').classList.contains('active')) renderBacktestModal();
+    }
+
+    // ============================================================
+    // GRILLA DE TARJETAS
+    // ============================================================
+    // Ranking usado solo para ELEGIR qué gráficos mostrar en modo automático
+    function rankForGrid(allItems, mode) {
+      let sorted = allItems.slice();
+      if (mode === 'dw') {
+        const sc = it => it.dwStatus && it.dwStatus.alert ? it.dwStatus.alert.score : Infinity;
+        sorted = sorted.filter(it => sc(it) < Infinity).sort((a, b) => sc(a) - sc(b));
+      } else if (mode === 'bull') sorted = sorted.filter(it => it.ready && it.probBull >= 50).sort((a, b) => b.probBull - a.probBull);
+      else if (mode === 'bear') sorted = sorted.filter(it => it.ready && it.probBull < 50).sort((a, b) => a.probBull - b.probBull);
+      else if (mode === 'edge') {
+        const edge = it => (it.bt && it.bt.strong) ? it.bt.strong.net : -Infinity;
+        sorted.sort((a, b) => edge(b) - edge(a));
+      } else sorted.sort((a, b) => (b.ready ? Math.abs(b.probBull - 50) : -1) - (a.ready ? Math.abs(a.probBull - 50) : -1));
+      return sorted;
+    }
+
+    let autoGrid = [], autoGridKey = '';
+    try {
+      const g = JSON.parse(localStorage.getItem('crypto_auto_grid') || 'null');
+      if (g && Array.isArray(g.syms)) { autoGrid = g.syms; autoGridKey = g.key || ''; }
+    } catch (e) {}
+
+    function reorderAndRenderGrid() {
+      const allItems = Object.values(state);
+      if (!allItems.length) return;
+      const mode = document.getElementById('filter-mode').value;
+      const limit = parseInt(document.getElementById('display-limit').value);
+      const modeEl = document.getElementById('grid-mode');
+
+      // Modo manual: se muestran exactamente los pares tildados en el resumen
+      const manual = selectedSymbols();
+      ['filter-mode', 'display-limit'].forEach(id => { document.getElementById(id).disabled = manual.length > 0; });
+      if (manual.length) {
+        modeEl.innerHTML = `Selección manual: ${manual.length} gráfico${manual.length > 1 ? 's' : ''} · <a onclick="clearSelection()">volver a automático</a>`;
+        const changed = manual.join(',') !== activeGridSymbols.join(',') || !document.querySelector('#charts-grid .card');
+        activeGridSymbols = manual;
+        if (changed) renderChartsGrid(manual.map(s => state[s]), 'manual');
+        syncTradeStream();
+        sortTable();
+        return;
+      }
+      modeEl.innerText = 'Automático (fijo) · tildá pares en el resumen para elegir qué gráficos ver';
+
+      // Las tarjetas no se reordenan: se eligen al cambiar el filtro o la cantidad (o la primera vez)
+      // y después mantienen su lugar aunque cambien los datos. Solo el resumen se reordena.
+      const key = `${mode}|${limit}`;
+      let syms = autoGrid.filter(sym => state[sym]);
+      if (key !== autoGridKey || !syms.length) {
+        syms = rankForGrid(allItems, mode).slice(0, limit).map(it => it.symbol);
+        autoGridKey = key;
+      } else if (syms.length < limit) {
+        // Si se sacó un par del portafolio, se completa al final sin mover los que ya están
+        rankForGrid(allItems, mode).forEach(it => { if (syms.length < limit && !syms.includes(it.symbol)) syms.push(it.symbol); });
+      }
+      autoGrid = syms;
+      try { localStorage.setItem('crypto_auto_grid', JSON.stringify({ key: autoGridKey, syms })); } catch (e) {}
+
+      const same = syms.join(',') === activeGridSymbols.join(',') && document.querySelector('#charts-grid .card');
+      activeGridSymbols = syms;
+      setTimeout(syncTradeStream, 0);
+      if (!same) renderChartsGrid(syms.map(x => state[x]), mode);
+      sortTable();
+    }
+
+    // La tarjeta del gráfico que el usuario está mirando y su posición en pantalla
+    function scrollAnchor(container) {
+      const cards = container.querySelectorAll(':scope > .card');
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        if (r.bottom > 60) return { sym: c.dataset.sym, top: r.top };
+      }
+      return null;
+    }
+
+    function buildCard(s) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = `card-${s}`;
+      card.dataset.sym = s;
+        card.innerHTML = `
+          <div class="card-header">
+            <div>
+              <div class="symbol-name">${s}</div>
+              <div class="symbol-price" id="price-${s}"></div>
+            </div>
+            <span class="badge" id="badge-${s}"></span>
+          </div>
+          <div class="metrics" id="metrics-${s}"></div>
+          <div class="card-body">
+            <div class="chart-col">
+              <div class="canvas-wrapper">
+                <canvas class="chart" id="canvas-${s}"></canvas>
+                <div id="tooltip-${s}" class="chart-tooltip"></div>
+              </div>
+              <div class="bt-foot" id="bt-foot-${s}"></div>
+            </div>
+            <div class="side-col">
+              <div class="side-top">
+                <div class="prob-bar-container">
+                  <div class="prob-labels">
+                    <span id="prob-label-${s}">Prob. ↑</span>
+                    <span id="prob-val-${s}"></span>
+                  </div>
+                  <div class="prob-bar"><div class="prob-fill" id="prob-fill-${s}"></div></div>
+                  <div class="prob-sub" id="prob-sub-${s}"></div>
+                </div>
+                <div class="move-box" id="move-${s}"></div>
+                <div class="tp-box">
+                  <div class="tp-item"><span class="tp-label">TP1</span><span class="tp-val" id="tp1-${s}"></span><span class="tp-hit" id="tp1h-${s}"></span></div>
+                  <div class="tp-item"><span class="tp-label">TP2</span><span class="tp-val" id="tp2-${s}"></span><span class="tp-hit" id="tp2h-${s}"></span></div>
+                  <div class="tp-item"><span class="tp-label">TP3</span><span class="tp-val" id="tp3-${s}"></span><span class="tp-hit" id="tp3h-${s}"></span></div>
+                  <div class="tp-item"><span class="tp-label">SL</span><span class="tp-val sl" id="sl-${s}"></span><span class="tp-hit" id="slh-${s}"></span></div>
+                </div>
+              </div>
+              <div class="details-cols" id="details-${s}"></div>
+            </div>
+          </div>
+        `;
+      return card;
+    }
+
+    // Arma la grilla reutilizando las tarjetas existentes: nunca la vacía (vaciarla achica la página y
+    // el navegador sube el scroll). Si la tarjeta que se estaba mirando cambia de lugar, la vista la sigue.
+    function renderChartsGrid(items, mode) {
+      const container = document.getElementById('charts-grid');
+      const anchor = window.scrollY > 0 ? scrollAnchor(container) : null;
+      const y0 = window.scrollY;
+      container.style.minHeight = container.offsetHeight + 'px';
+      container.querySelectorAll(':scope > .empty-msg').forEach(e => e.remove());
+      if (!items.length) {
+        container.querySelectorAll(':scope > .card').forEach(c => c.remove());
+        const msg = document.createElement('div');
+        msg.className = 'empty-msg';
+        msg.textContent = mode === 'manual' ? 'Ninguno de los pares tildados tiene datos todavía.'
+                        : mode === 'dw' ? 'Ningún par está cerca de un soporte o resistencia del día o la semana.'
+                        : mode === 'bull' ? 'No hay monedas alcistas en este momento.'
+                        : mode === 'bear' ? 'No hay monedas bajistas en este momento.'
+                        : 'Sin datos para mostrar.';
+        container.appendChild(msg);
+        container.style.minHeight = '';
+        return;
+      }
+      const existing = new Map([...container.querySelectorAll(':scope > .card')].map(c => [c.dataset.sym, c]));
+      const frag = document.createDocumentFragment(), fresh = [];
+      items.forEach(item => {
+        const s = item.symbol;
+        let card = existing.get(s);
+        if (card) existing.delete(s);
+        else { card = buildCard(s); fresh.push(s); }
+        frag.appendChild(card);
+      });
+      existing.forEach(c => c.remove());
+      container.appendChild(frag);
+      fresh.forEach(s => updateSingleCard(s));   // se dibujan con la grilla ya completa
+      container.style.minHeight = '';
+      // Mantener la vista: misma moneda en la misma posición, o el mismo scroll si esa moneda ya no está
+      if (anchor) {
+        const c = document.getElementById(`card-${anchor.sym}`);
+        if (c) pageScrollBy(c.getBoundingClientRect().top - anchor.top);
+        else { ignoreScrollUntil = Date.now() + 150; window.scrollTo(0, y0); }
+      }
+    }
+
+    function metricChip(text, cls, title) {
+      return `<span class="metric ${cls || ''}" title="${title || ''}">${text}</span>`;
+    }
+
+    function updateSingleCard(sym) {
+      const item = state[sym];
+      if (!item) return;
+      const tf = currentTimeframe;
+      const set = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; return el; };
+
+      set(`price-${sym}`, formatPrice(item.price));
+
+      const badge = document.getElementById(`badge-${sym}`);
+      if (!item.ready) {
+        if (badge) { badge.className = 'badge badge-none'; badge.innerText = item.loadError ? 'ERROR' : 'SIN DATOS'; }
+        set(`prob-val-${sym}`, '—');
+        set(`prob-sub-${sym}`, item.loadError ? `No se pudo cargar: ${item.loadError}` : 'Historial insuficiente para analizar.');
+        const m = document.getElementById(`metrics-${sym}`); if (m) m.innerHTML = '';
+        ['tp1', 'tp2', 'tp3', 'sl'].forEach(k => { set(`${k}-${sym}`, '—'); set(`${k === 'sl' ? 'slh' : k + 'h'}-${sym}`, ''); });
+        set(`bt-foot-${sym}`, '');
+        const mb0 = document.getElementById(`move-${sym}`); if (mb0) mb0.innerHTML = '';
+        renderDetails(item);
+        drawCanvasChart(item);
+        return;
+      }
+
+      const isBull = item.dir > 0;
+      if (badge) {
+        if (item.noEdge) {
+          badge.className = 'badge badge-none';
+          badge.innerText = 'SIN VENTAJA';
+          badge.title = `El historial de este par no muestra una ventaja clara en ninguna dirección. Los TP siguen a la tendencia ${HTF_LABEL[HTF_OF[tf]]} (${isBull ? 'alcista' : 'bajista'}).`;
+        } else {
+          badge.className = `badge ${isBull ? 'badge-bull' : 'badge-bear'}`;
+          badge.innerText = isBull ? 'ALCISTA' : 'BAJISTA';
+          badge.title = '';
+        }
+      }
+
+      // Métricas
+      const chips = [];
+      if (item.conflict) chips.push(metricChip(`⚠ ${item.conflict}`, 'warn',
+        'La probabilidad de corto plazo apunta en contra de la tendencia mayor y de los indicadores: un movimiento así suele ser corto'));
+      if (item.rsi != null) {
+        const [hiB, loB] = rsiBands(item.rsiP);
+        chips.push(metricChip(`RSI${item.rsiP} ${item.rsi.toFixed(0)}`, item.rsi > hiB || item.rsi < loB ? 'warn' : '',
+          `RSI de ${item.rsiP} períodos${rsiMode === 'auto' ? ' (elegido por backtest)' : ''} · bandas ${hiB}/${loB}`));
+      }
+      if (item.relVolLive != null) {
+        const rv = item.relVolLive;
+        chips.push(metricChip(`Vol ${rv.toFixed(1)}x`, rv > 1.5 ? 'up' : rv < 0.7 ? 'warn' : '', 'Volumen de la vela actual (proyectado) vs promedio de 20 velas'));
+      }
+      if (item.atrRank != null) {
+        const r = item.atrRank;
+        const lbl = r < 20 ? 'comprimida' : r > 80 ? 'expandida' : 'normal';
+        chips.push(metricChip(`Volat. ${lbl} (p${r.toFixed(0)})`, r < 20 || r > 80 ? 'warn' : '', 'Percentil del ATR% actual en las últimas 500 velas'));
+      }
+      if (item.htfTrend) chips.push(metricChip(`${HTF_LABEL[HTF_OF[tf]]} ${item.htfTrend > 0 ? '↑' : '↓'}`, item.htfTrend > 0 ? 'up' : 'down', 'Tendencia de la temporalidad mayor (cierre vs EMA 50)'));
+      if (item.rs != null) chips.push(metricChip(`vs BTC ${item.rs >= 0 ? '+' : ''}${item.rs.toFixed(1)}%`, item.rs > 0 ? 'up' : 'down', `Rendimiento de las últimas ${CFG.rsBars} velas menos el de BTC`));
+      if (item.tradeStats) {
+        const st = item.tradeStats;
+        if (st.buy.level >= 2 && st.buy.level > st.sell.level) chips.push(metricChip('🐋 Compra grande', 'up', `Compras: ${st.buy.verdict} (${pct(st.buy.bigShare, 0)} del volumen en órdenes grandes)`));
+        if (st.sell.level >= 2 && st.sell.level > st.buy.level) chips.push(metricChip('🐋 Venta grande', 'down', `Ventas: ${st.sell.verdict} (${pct(st.sell.bigShare, 0)} del volumen en órdenes grandes)`));
+      }
+      if (item.vol && item.vol.divergence) chips.push(metricChip(`⚠ ${item.vol.divergence.type}`, 'warn', item.vol.divergence.txt));
+      if (item.dwStatus && item.dwStatus.alert) {
+        const a = item.dwStatus.alert;
+        chips.push(metricChip(`📍 ${dwAlertText(a)}`, `${a.role === 'soporte' ? 'up' : 'down'}${a.state === 'zona' ? ' hot' : ''}`,
+          `${a.label}: ${formatPrice(a.price)} (${a.dist >= 0 ? '+' : ''}${a.dist.toFixed(2)}%)`));
+      }
+      if (item.fvg && item.fvg.inside) {
+        const g = item.fvg.inside;
+        chips.push(metricChip(`Dentro de FVG ${g.type > 0 ? '↑' : '↓'}`, g.type > 0 ? 'up' : 'down',
+          `El precio está dentro de un hueco ${g.type > 0 ? 'alcista' : 'bajista'} abierto (${Math.round(g.fill * 100)}% llenado)`));
+      }
+      if (item.vp) chips.push(metricChip(`Precio ${item.price > item.vp.poc ? 'sobre' : 'bajo'} POC`, item.price > item.vp.poc ? 'up' : 'down', 'Precio con más volumen negociado en las últimas 500 velas'));
+      const m = document.getElementById(`metrics-${sym}`);
+      if (m) m.innerHTML = chips.join('');
+
+      // Probabilidad
+      const calibrated = item.probCal != null;
+      set(`prob-label-${sym}`, !calibrated ? 'Puntaje (sin calibrar)' : item.noEdge ? 'Prob. ↑ · sin ventaja histórica' : 'Prob. ↑ calibrada');
+      const pv = set(`prob-val-${sym}`, `${item.probBull.toFixed(1)}%`);
+      if (pv) pv.className = item.noEdge ? 'muted' : (item.probBull >= 50 ? 'val-up' : 'val-down');
+      const pf = document.getElementById(`prob-fill-${sym}`);
+      if (pf) { pf.style.width = `${item.probBull}%`; pf.style.opacity = item.noEdge ? '0.35' : '1'; }
+      const obiTxt = `libro ${item.obi >= 0 ? '+' : ''}${(item.obi * 100).toFixed(0)}%`;
+      const pp = item.probParts;
+      const partsTxt = pp ? `calibración ${pct(pp.cal, 0)}${pp.an != null ? ` · casos parecidos ${pct(pp.an, 0)} (${pp.ups}/${pp.k} subieron)` : ''}` : '';
+      set(`prob-sub-${sym}`, calibrated
+        ? `${HORIZON_LABEL[tf]} · ${partsTxt} · base ${pct(item.bt.fit.base, 0)} · ${obiTxt}`
+        : `Historial corto: sin calibración · ${obiTxt}`);
+
+      // Objetivos con su tasa histórica de acierto
+      const tpStats = item.bt && item.bt.tp ? item.bt.tp[item.dir] : null;
+      [['tp1', 'h1'], ['tp2', 'h2'], ['tp3', 'h3']].forEach(([k, h]) => {
+        const el = set(`${k}-${sym}`, formatPrice(item[k]));
+        if (el) el.className = `tp-val ${isBull ? 'bull' : 'bear'}`;
+        const he = set(`${k}h-${sym}`, tpStats ? `${pct(tpStats[h], 0)} hist.` : '');
+        if (he) he.title = `Alcanzado antes del SL dentro de ${TPWIN_LABEL[tf]}, en ${tpStats ? tpStats.n : 0} señales ${isBull ? 'alcistas' : 'bajistas'}`;
+      });
+      set(`sl-${sym}`, formatPrice(item.sl));
+      set(`slh-${sym}`, item.atr ? `${(Math.abs(item.price - item.sl) / item.atr).toFixed(1)} ATR` : '');
+
+      // Pie con validación
+      const bt = item.bt;
+      let foot = '';
+      if (bt && bt.oos) {
+        const o = bt.oos;
+        foot = `Fuera de muestra: acierto ${pct(o.acc)} vs ${pct(o.accBase)} base · skill ${o.skill >= 0 ? '+' : ''}${(o.skill * 100).toFixed(1)}%`;
+        if (bt.strong) foot += ` · señales fuertes ${bt.strong.net >= 0 ? '+' : ''}${bt.strong.net.toFixed(2)}% neto`;
+      } else if (bt) foot = 'Pocas muestras para validar fuera de muestra.';
+      set(`bt-foot-${sym}`, foot);
+      renderMoveBox(item);
+
+      renderDetails(item);
+      drawCanvasChart(item);
+    }
+
+    // Panel lateral de la tarjeta: niveles, indicadores y backtest del par
+    function renderDetails(item) {
+      const el = document.getElementById(`details-${item.symbol}`);
+      if (!el) return;
+      if (!item.ready) { el.innerHTML = ''; return; }
+      const tf = currentTimeframe, p = item.price, ser = item.ser;
+      const last = ser ? ser.close.length - 1 : -1;
+      const dist = x => {
+        if (!(x > 0)) return '';
+        const d = (x / p - 1) * 100;
+        return `${d >= 0 ? '+' : ''}${d.toFixed(2)}%`;
+      };
+      const row = (k, v, sub, cls) =>
+        `<div class="d-row"><span class="d-k">${k}</span><span class="d-v ${cls || ''}">${v}${sub ? ` <small>${sub}</small>` : ''}</span></div>`;
+      const sec = (title, rows) => `<div class="d-sec"><div class="d-title">${title}</div>${rows.filter(Boolean).join('')}</div>`;
+      const sign = x => `${x >= 0 ? '+' : ''}`;
+
+      const sr = item.sr || {};
+      const vwap = ser && ser.vwap[last];
+      const levels = sec('Niveles', [
+        row('Resistencia', formatPrice(sr.resistance), `${dist(sr.resistance)} · ${sr.resStrength ? sr.resStrength + ' toques' : 'máx. 20 velas'}`),
+        row('Soporte', formatPrice(sr.support), `${dist(sr.support)} · ${sr.supStrength ? sr.supStrength + ' toques' : 'mín. 20 velas'}`),
+        item.vp && row('POC', formatPrice(item.vp.poc), dist(item.vp.poc)),
+        vwap && row('VWAP', formatPrice(vwap), dist(vwap))
+      ]);
+
+      const hist = ser && ser.hist[last];
+      const atrPctTxt = item.atr ? `${(item.atr / p * 100).toFixed(2)}%` : '';
+      const ind = sec('Indicadores', [
+        item.rsi != null && (() => {
+          const [hiB, loB] = rsiBands(item.rsiP);
+          return row(`RSI ${item.rsiP}${rsiMode === 'auto' ? ' (auto)' : ''}`, item.rsi.toFixed(1),
+            item.rsi > hiB ? 'sobrecompra' : item.rsi < loB ? 'sobreventa' : `bandas ${hiB}/${loB}`,
+            item.rsi > hiB || item.rsi < loB ? 'val-down' : '');
+        })(),
+        item.btBy && RSI_PERIODS.every(p => item.btBy[p] && item.btBy[p].oos) && row('Skill RSI 9 / 14',
+          RSI_PERIODS.map(p => `${item.btBy[p].oos.skill >= 0 ? '+' : ''}${(item.btBy[p].oos.skill * 100).toFixed(1)}%`).join(' / '),
+          'fuera de muestra'),
+        hist != null && row('MACD hist.', hist > 0 ? 'positivo' : 'negativo', '', hist > 0 ? 'val-up' : 'val-down'),
+        item.atr && row('ATR 14', formatPrice(item.atr), atrPctTxt),
+        item.atrRank != null && row('Volatilidad', `p${item.atrRank.toFixed(0)}`, item.atrRank < 20 ? 'comprimida' : item.atrRank > 80 ? 'expandida' : 'normal'),
+        item.relVolLive != null && row('Volumen rel.', `${item.relVolLive.toFixed(2)}x`, 'proyectado', item.relVolLive > 1.5 ? 'val-up' : ''),
+        item.htfTrend ? row(`Tendencia ${HTF_LABEL[HTF_OF[tf]]}`, item.htfTrend > 0 ? 'alcista' : 'bajista', 'vs EMA 50', item.htfTrend > 0 ? 'val-up' : 'val-down') : '',
+        item.rs != null && row('vs BTC', `${sign(item.rs)}${item.rs.toFixed(2)}%`, `${CFG.rsBars} velas`, item.rs > 0 ? 'val-up' : 'val-down'),
+        row('Puntaje técnico', item.sTech.toFixed(1), `con libro ${item.score.toFixed(1)}`)
+      ]);
+
+      const bt = item.bt;
+      let btSec = '';
+      if (bt) {
+        const st = bt.tp[item.dir];
+        const dirTxt = item.dir > 0 ? 'alcistas' : 'bajistas';
+        const o = bt.oos;
+        btSec = sec(`Backtest (${bt.n} muestras)`, [
+          row('Período', `${fmtDate(bt.from)} – ${fmtDate(bt.to)}`),
+          row('Base ↑', pct(bt.fit.base)),
+          o && row('Acierto fuera de muestra', pct(o.acc), `base ${pct(o.accBase)}`, o.acc > o.accBase ? 'val-up' : 'val-down'),
+          o && row('Skill', `${sign(o.skill)}${(o.skill * 100).toFixed(1)}%`, '', o.skill > 0 ? 'val-up' : 'val-down'),
+          st && row(`TP1 en señales ${dirTxt}`, pct(st.h1, 0), st.bars != null ? `~${st.bars.toFixed(0)} velas` : ''),
+          st && row('TP2', pct(st.h2, 0)),
+          st && row('TP3', pct(st.h3, 0), `de ${st.n} señales`),
+          bt.strong && row('Señales fuertes', `${sign(bt.strong.net)}${bt.strong.net.toFixed(2)}%`, `${pct(bt.strong.win, 0)} gan.`, bt.strong.net > 0 ? 'val-up' : 'val-down')
+        ]);
+      } else {
+        btSec = sec('Backtest', [row('Estado', 'historial insuficiente')]);
+      }
+
+      el.innerHTML = dayWeekSection(item) + analogSection(item) + moveSection(item) + majorSection(item) + levels + fvgSection(item) + bookSection(item) + volumeSection(item) + ind + btSec;
+    }
+
+    // Bloque de la tarjeta: probabilidad de tocar +5% / −5% en la ventana
+    function renderMoveBox(item) {
+      const el = document.getElementById(`move-${item.symbol}`);
+      if (!el) return;
+      const m = item.move, tf = currentTimeframe, a = item.analog;
+      if (a) {
+        const ab = (lbl, p, base, hits, col) => `
+          <div class="move-item" title="De los ${a.k} momentos del historial más parecidos al actual, ${hits} tocaron ese nivel. Tasa general: ${pct(base, 0)}">
+            <div class="move-top"><span>${lbl}</span><b style="color:${col}">${pct(p, 0)}</b></div>
+            <div class="move-bar"><i style="width:${Math.min(100, p * 100).toFixed(1)}%;background:${col}"></i></div>
+            <div class="move-sub">${hits} de ${a.k} casos parecidos · general ${pct(base, 0)}${p > base * 1.2 ? ' · por encima' : p < base * 0.8 ? ' · por debajo' : ''}</div>
+          </div>`;
+        el.innerHTML =
+          ab(`Salto +${MOVE.pct}% en ${MOVE.winLabel[tf]}`, a.pUp, a.baseUp, a.ups, '#0ecb81') +
+          ab(`Caída −${MOVE.pct}% en ${MOVE.winLabel[tf]}`, a.pDn, a.baseDn, a.dns, '#f6465d');
+        return;
+      }
+      if (!m) { el.innerHTML = `<div class="move-sub" style="grid-column:1/-1">Movimiento ±${MOVE.pct}%: historial insuficiente para estimarlo.</div>`; return; }
+      const st = item.bt && item.bt.move;
+      const weak = st && st.nEff < MOVE.minIndep;
+      const box = (lbl, p, base, col) => `
+        <div class="move-item" title="Frecuencia histórica en situaciones parecidas (volatilidad ${REGIME_LABEL[m.rb]}, señal ${SIDE_LABEL[m.sb]}). Tasa general: ${pct(base, 0)}">
+          <div class="move-top"><span>${lbl}</span><b style="color:${col}">${pct(p, 0)}</b></div>
+          <div class="move-bar"><i style="width:${Math.min(100, p * 100).toFixed(1)}%;background:${col}"></i></div>
+          <div class="move-sub">general ${pct(base, 0)} · ${p > base * 1.2 ? 'por encima' : p < base * 0.8 ? 'por debajo' : 'en línea'}${weak ? ' · ⚠ muestra chica' : ''}</div>
+        </div>`;
+      el.innerHTML =
+        box(`Toca +${MOVE.pct}% en ${MOVE.winLabel[tf]}`, m.up, m.upBase, '#0ecb81') +
+        box(`Toca −${MOVE.pct}% en ${MOVE.winLabel[tf]}`, m.dn, m.dnBase, '#f6465d');
+    }
+
+    // Sección del panel: volumen operado y flujo de compras/ventas agresivas
+    function volumeSection(item) {
+      const st = item.tradeStats, v = item.vol;
+      const ago = T => { const m = Math.max(0, Math.round((Date.now() - T) / 60000)); return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : `hace ${(m / 60).toFixed(1)} h`; };
+      let head = '', rows = '';
+      if (!st) {
+        rows = `<div class="book-note">Escuchando operaciones en vivo… (hace falta un mínimo de 30)</div>`;
+      } else {
+        const mins = Math.max(1, Math.round((st.to - st.from) / 60000));
+        head = ` <span class="muted" style="text-transform:none;font-weight:400">· ${mins >= 55 ? 'última hora' : `últimos ${mins} min`} · ${st.n.toLocaleString('es-AR')} oper.</span>`;
+        const sideRow = (lbl, sd, isBuy) => {
+          const cls = sd.level >= 2 ? (isBuy ? 'val-up' : 'val-down') : '';
+          const detail = sd.n
+            ? `${sd.bigN} ${sd.bigN === 1 ? 'orden' : 'órdenes'} ≥ ${fmtUsd(st.thr)} = ${pct(sd.bigShare, 0)} del volumen · mayor ${fmtUsd(sd.top1.usd)} ${ago(sd.top1.T)}`
+            : '';
+          return `<div class="d-row" title="Total ${isBuy ? 'comprado' : 'vendido'} a mercado: ${fmtUsd(sd.total)} en ${sd.n} órdenes"><span class="d-k">${lbl}</span><span class="d-v ${cls}">${sd.verdict}</span></div>
+                  ${detail ? `<div class="book-note">${detail}</div>` : ''}`;
+        };
+        const net = st.bigNet;
+        rows = sideRow('Compras', st.buy, true) + sideRow('Ventas', st.sell, false) +
+          `<div class="d-row" title="Órdenes grandes de compra menos órdenes grandes de venta"><span class="d-k">Neto de los grandes</span><span class="d-v ${net >= 0 ? 'val-up' : 'val-down'}">${net >= 0 ? '+' : '−'}${fmtUsd(Math.abs(net))} <small>${Math.abs(net) < st.thr ? 'equilibrado' : net > 0 ? 'compran' : 'venden'}</small></span></div>`;
+      }
+      // Avisos que se mantienen: divergencia precio/flujo y vela de clímax
+      if (v && v.divergence) rows += `<div class="book-note" style="color:var(--accent-yellow)">⚠ ${v.divergence.type}: ${v.divergence.txt}</div>`;
+      if (v && v.climax) {
+        const c = v.climax;
+        rows += `<div class="d-row" title="Vela con volumen extremo. Una mecha larga del lado opuesto suele indicar agotamiento"><span class="d-k">Clímax</span><span class="d-v ${c.sell ? 'val-down' : 'val-up'}">${c.sell ? 'vendedor' : 'comprador'} hace ${c.ago} v. <small>vol ${c.rel.toFixed(1)}× · mecha ${Math.round(c.wick * 100)}%</small></span></div>`;
+      }
+      return `<div class="d-sec"><div class="d-title">Volumen operado · quién opera${head}</div>${rows}</div>`;
+    }
+
+    // Texto corto del aviso de día/semana
+    function dwAlertText(a) {
+      const sc = a.scope === 'día' ? 'de ayer' : 'de la semana anterior';
+      const what = a.kind === 'high' ? 'máx.' : 'mín.';
+      const d = `${a.dist >= 0 ? '+' : ''}${a.dist.toFixed(2)}%`;
+      if (a.state === 'zona') return a.broken ? `Retesteando ${what} ${sc}` : `En ${a.role} · ${what} ${sc}`;
+      return `${a.role === 'soporte' ? 'Soporte' : 'Resistencia'} ${a.scope === 'día' ? 'del día' : 'semanal'} a ${d}`;
+    }
+
+    // Sección del panel: máximos y mínimos de ayer y de la semana anterior
+    function dayWeekSection(item) {
+      const st = item.dwStatus;
+      if (!st) return '';
+      const p = item.price;
+      const pill = r => r.state === 'zona' ? '<span class="dw-pill zona">EN ZONA</span>'
+                      : r.state === 'cerca' ? '<span class="dw-pill cerca">cerca</span>' : '';
+      const row = r => `<div class="d-row${r.state === 'zona' ? ' dw-hot' : ''}" title="${r.label}: ${formatPrice(r.price)} · hoy actúa como ${r.role}${r.broken ? ' (el precio ya lo atravesó)' : ''}">
+          <span class="d-k">${r.label}${r.broken ? ' <small>roto ' + (r.kind === 'high' ? '↑' : '↓') + '</small>' : ''}</span>
+          <span class="d-v ${r.role === 'soporte' ? 'val-up' : 'val-down'}">${pill(r)} ${formatPrice(r.price)} <small>${r.dist >= 0 ? '+' : ''}${r.dist.toFixed(2)}%</small></span>
+        </div>`;
+      const above = st.rows.filter(r => r.dist > 0).sort((a, b) => b.price - a.price);
+      const below = st.rows.filter(r => r.dist <= 0).sort((a, b) => b.price - a.price);
+      const head = st.alert ? `<div class="book-note" style="color:var(--accent-yellow)">📍 ${dwAlertText(st.alert)}</div>` : '';
+      return `<div class="d-sec" title="En zona: a menos de ${st.zone.toFixed(2)}% · cerca: a menos de ${st.near.toFixed(2)}% (según la volatilidad actual)">
+        <div class="d-title">Día y semana anterior</div>${head}
+        ${above.map(row).join('')}
+        <div class="book-mid">precio ${formatPrice(p)}</div>
+        ${below.map(row).join('')}
+      </div>`;
+    }
+
+    // Sección del panel: soportes y resistencias mayores del historial diario
+    function majorSection(item) {
+      const m = item.majorNear;
+      if (!m || (!m.below.length && !m.above.length)) return '';
+      const p = item.price;
+      const dist = x => { const d = (x / p - 1) * 100; return `${d >= 0 ? '+' : ''}${d.toFixed(1)}%`; };
+      const desc = l => {
+        const parts = [];
+        if (l.touches) parts.push(`${l.touches} toque${l.touches > 1 ? 's' : ''}`);
+        l.sources.filter(x => x !== 'pivote').forEach(x => parts.push(x));
+        return parts.join(' · ');
+      };
+      const row = (lbl, l, cls) => `<div class="d-row" title="${desc(l)} · fuerza ${l.strength.toFixed(1)}"><span class="d-k">${lbl} <small>${desc(l)}</small></span><span class="d-v ${cls}">${formatPrice(l.price)} <small>${dist(l.price)}</small></span></div>`;
+      const yrs = m.days / 365;
+      const span = yrs >= 1 ? `${yrs.toFixed(1).replace('.', ',')} años` : `${m.days} días`;
+      return `<div class="d-sec"><div class="d-title">Niveles mayores · diario, ${span}</div>
+        ${m.above.slice().reverse().map((l, i) => row(`R${m.above.length - i}`, l, 'val-down')).join('')}
+        <div class="book-mid">precio ${formatPrice(p)}</div>
+        ${m.below.map((l, i) => row(`S${i + 1}`, l, 'val-up')).join('')}
+      </div>`;
+    }
+
+    // Sección del panel: los momentos del historial más parecidos al actual y qué pasó después
+    function analogSection(item) {
+      const a = item.analog, model = item.bt && item.bt.analog;
+      if (!a || !model) return '';
+      const tf = currentTimeframe, ms = TF_MS[tf];
+      const dur = bars => { const h = bars * ms / 36e5; return h < 48 ? `${h.toFixed(h < 10 ? 1 : 0)}h` : `${(h / 24).toFixed(1)}d`; };
+      const when = t => new Date(t).toLocaleString('es-AR', tf === '1d'
+        ? { day: '2-digit', month: '2-digit', year: '2-digit' }
+        : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+      const out = c => {
+        const up = c.up ? `<span class="val-up">↑ ${dur(c.upAt)}</span>` : '';
+        const dn = c.dn ? `<span class="val-down">↓ ${dur(c.dnAt)}</span>` : '';
+        if (up && dn) return c.upAt <= c.dnAt ? `${up} ${dn}` : `${dn} ${up}`;
+        return up || dn || '<span class="muted">sin salto</span>';
+      };
+      const o = model.oos;
+      let tag = '';
+      if (o) {
+        const good = (o.skillUp != null && o.skillUp > 0.02) || (o.skillDn != null && o.skillDn > 0.02);
+        const unknown = o.skillUp == null && o.skillDn == null;
+        tag = unknown ? '<span class="muted">validación: pocos saltos</span>'
+            : good ? '<span class="val-up">validado: anticipa ✓</span>'
+            : '<span class="val-down">validado: no anticipa</span>';
+      }
+      const caseRows = a.cases.slice(0, 3).map(c =>
+        `<div class="d-row"><span class="d-k">${when(c.time)} <small class="case-sim">${Math.round(c.sim * 100)}%</small></span><span class="d-v">${out(c)}</span></div>`).join('');
+      return `<div class="d-sec" title="Los momentos del historial más parecidos a la última vela cerrada (volatilidad, compresión, impulso, volumen, RSI, VWAP, MACD, tendencia) y si tocaron ±${MOVE.pct}% en ${MOVE.winLabel[tf]}">
+        <div class="d-title">Casos parecidos · ${a.k}</div>
+        <div class="d-row"><span class="d-k">Terminaron en salto</span><span class="d-v"><span class="val-up">${a.ups} ↑</span> · <span class="val-down">${a.dns} ↓</span></span></div>
+        ${caseRows}
+        ${tag ? `<div class="book-note">${tag}</div>` : ''}
+      </div>`;
+    }
+
+    // Sección del panel: detalle del análisis de movimiento grande
+    function moveSection(item) {
+      const m = item.move, st = item.bt && item.bt.move;
+      if (!m || !st) return '';
+      const tf = currentTimeframe, ms = TF_MS[tf];
+      const dur = bars => {
+        if (bars == null) return '—';
+        const h = bars * ms / 36e5;
+        return h < 48 ? `${h.toFixed(h < 10 ? 1 : 0)}h` : `${(h / 24).toFixed(1)}d`;
+      };
+      const row = (k, v, sub, cls) =>
+        `<div class="d-row"><span class="d-k">${k}</span><span class="d-v ${cls || ''}">${v}${sub ? ` <small>${sub}</small>` : ''}</span></div>`;
+      const sk = x => x == null ? '—' : `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`;
+      const weak = st.nEff < MOVE.minIndep;
+      return `<div class="d-sec" title="Frecuencia histórica de tocar ±${MOVE.pct}% con la misma volatilidad (${REGIME_LABEL[m.rb]}) y sesgo (${SIDE_LABEL[m.sb]}). ${st.n} muestras, ≈${st.nEff} independientes.">
+        <div class="d-title">±${MOVE.pct}% en ${MOVE.winLabel[tf]} · por régimen${weak ? ' ⚠' : ''}</div>
+        ${row('↑ / ↓', `<span class="val-up">${pct(m.up, 0)}</span> / <span class="val-down">${pct(m.dn, 0)}</span>`, `gral ${pct(m.upBase, 0)}/${pct(m.dnBase, 0)}`)}
+        ${row('Tiempo típico', `↑${dur(st.fit.upBars)} ↓${dur(st.fit.dnBars)}`)}
+        ${st.oos ? row('Skill', `${sk(st.oos.skillUp)} / ${sk(st.oos.skillDn)}`, '', ((st.oos.skillUp || 0) > 0 || (st.oos.skillDn || 0) > 0) ? 'val-up' : 'val-down') : ''}
+        ${weak ? `<div class="book-note">⚠ muestra chica (≈${st.nEff} ventanas)</div>` : ''}
+      </div>`;
+    }
+
+    // Sección FVG: huecos abiertos más cercanos y cómo se comportaron históricamente en este par
+    function fvgSection(item) {
+      const f = item.fvg;
+      if (!f) return '';
+      const p = item.price;
+      const dist = x => { const d = (x / p - 1) * 100; return `${d >= 0 ? '+' : ''}${d.toFixed(2)}%`; };
+      const row = (k, v, sub, cls) =>
+        `<div class="d-row"><span class="d-k">${k}</span><span class="d-v ${cls || ''}">${v}${sub ? ` <small>${sub}</small>` : ''}</span></div>`;
+      const zone = g => `${formatPrice(g.remBot)} – ${formatPrice(g.remTop)}`;
+      const info = g => `<div class="book-note">${dist(g.type > 0 ? g.remTop : g.remBot)} · llenado ${Math.round(g.fill * 100)}% · hace ${g.age} velas</div>`;
+      const rows = [];
+      if (f.inside) rows.push(row('Precio dentro de', `FVG ${f.inside.type > 0 ? 'alcista' : 'bajista'}`, zone(f.inside), f.inside.type > 0 ? 'val-up' : 'val-down'));
+      rows.push(f.bearAbove
+        ? row('Bajista arriba', zone(f.bearAbove), '', 'val-down') + info(f.bearAbove)
+        : row('Bajista arriba', '—', 'ninguno abierto'));
+      rows.push(f.bullBelow
+        ? row('Alcista abajo', zone(f.bullBelow), '', 'val-up') + info(f.bullBelow)
+        : row('Alcista abajo', '—', 'ninguno abierto'));
+      rows.push(row('Abiertos', `${f.nBull} ↑ · ${f.nBear} ↓`, `últimas ${FVG.lookback} velas`));
+      const st = item.bt && item.bt.fvg;
+      if (st) {
+        rows.push(row('Llegan al 50%', pct(st.ce, 0), st.barsCe != null ? `~${st.barsCe.toFixed(0)} velas` : ''));
+        rows.push(row('Se cierran completos', pct(st.full, 0), `en ≤${st.win} velas · ${st.n} huecos`));
+      }
+      return `<div class="d-sec"><div class="d-title">FVG · huecos de valor</div>${rows.join('')}</div>`;
+    }
+
+    const fmtUsd = v => v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M`
+                      : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}K` : `$${v.toFixed(0)}`;
+
+    // Sección "Libro de órdenes": muros por tramos de 0,5% y distribución del dinero por distancia
+    function bookSection(item) {
+      const b = item.book;
+      const age = b ? Math.max(0, Math.round((Date.now() - b.t) / 1000)) : 0;
+      const title = `<div class="d-title">Libro · tramos ${String(BOOK.bucketPct).replace('.', ',')}%${b ? ` <span class="muted" style="text-transform:none;font-weight:400">· ${b.nSnaps} lect. · hace ${age}s</span>` : ''}</div>`;
+      if (!b) return `<div class="d-sec">${title}<div class="book-note">Leyendo el libro…</div></div>`;
+      const p = item.price;
+      const wallRow = (s, label) => {
+        const sd = b.sides[s], cls = s === 'ask' ? 'val-down' : 'val-up';
+        if (sd.wall) {
+          const w = sd.wall, d = (w.price / p - 1) * 100;
+          return `<div class="d-row" title="Zona ${formatPrice(w.lo)}–${formatPrice(w.hi)} · ${w.ratio.toFixed(1)}× la mediana · firme en ${Math.round(w.presence * 100)}% de las lecturas"><span class="d-k">${label}</span><span class="d-v ${cls}">${formatPrice(w.price)} <small>${d >= 0 ? '+' : ''}${d.toFixed(1)}% · ${fmtUsd(w.notional)}</small></span></div>`;
+        }
+        const why = sd.reason === 'cobertura' ? `libro hasta ${s === 'ask' ? '+' : '−'}${sd.cover.toFixed(1)}%`
+                  : sd.reason === 'confirmando' ? `confirmando ${b.nSnaps}/${BOOK.minSnaps}`
+                  : sd.reason === 'viejo' ? 'lectura vieja' : 'sin muro';
+        return `<div class="d-row"><span class="d-k">${label}</span><span class="d-v"><small>${why}</small></span></div>`;
+      };
+      // Histograma: 3 tramos por lado, medidos desde el precio actual (última lectura)
+      const asks = b.sides.ask.buckets, bids = b.sides.bid.buckets;
+      const maxN = Math.max(...asks.concat(bids).map(x => x.notional), 1);
+      const nf = v => v.toFixed(1).replace('.', ',');
+      const bar = (x, s) => {
+        const isWall = b.sides[s].wall && b.sides[s].wall.k === x.k;
+        const sg = s === 'ask' ? '+' : '−';
+        return `<div class="book-row${isWall ? ' wall' : ''}" title="${formatPrice(x.lo)} – ${formatPrice(x.hi)}">
+                  <span class="book-lbl">${sg}${nf(x.from)}–${nf(x.to)}%${x.partial ? '*' : ''}</span>
+                  <span class="book-bar"><i class="${s}" style="width:${(x.notional / maxN * 100).toFixed(1)}%"></i></span>
+                  <span class="book-val">${fmtUsd(x.notional)}</span>
+                </div>`;
+      };
+      const obi = b.obi;
+      return `<div class="d-sec">${title}
+        ${wallRow('ask', 'Muro venta')}
+        ${wallRow('bid', 'Muro compra')}
+        <div class="d-row"><span class="d-k">Presión ±${BOOK.nearPct}%</span><span class="d-v ${b.stale ? '' : obi > 0 ? 'val-up' : 'val-down'}">${b.stale ? '—' : `${obi >= 0 ? '+' : ''}${(obi * 100).toFixed(0)}%`}</span></div>
+        <div class="book-bars">${asks.slice().reverse().map(x => bar(x, 'ask')).join('')}${bids.map(x => bar(x, 'bid')).join('')}</div>
+      </div>`;
+    }
+
+    // ============================================================
+    // TABLA LATERAL
+    // ============================================================
+    function renderTableStructure() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+      Object.values(state).forEach((item, index) => {
+        const s = item.symbol;
+        const tr = document.createElement('tr');
+        tr.id = `row-${s}`;
+        tr.innerHTML = `
+          <td class="sel"><input type="checkbox" id="sel-${s}" title="Mostrar el gráfico de ${s}"></td>
+          <td class="rank-num">${index + 1}</td>
+          <td class="bold">${s} <span class="dw-tag" id="tbl-dw-${s}"></span></td>
+          <td class="mono" id="tbl-price-${s}"></td>
+          <td class="bold" id="tbl-prob-${s}"></td>
+          <td class="mono" id="tbl-tp1-${s}"></td>
+          <td class="muted" id="tbl-hit-${s}"></td>
+          <td class="mono" id="tbl-move-${s}" style="font-size:0.74rem"></td>
+        `;
+        tbody.appendChild(tr);
+        document.getElementById(`sel-${s}`).addEventListener('change', e => toggleSelect(s, e.target.checked));
+        updateTableRow(s);
+      });
+      syncCheckboxes();
+      sortTable();
+      const sc = document.getElementById('strip-count');
+      if (sc) sc.innerText = Object.keys(state).length;
+    }
+
+    function sortTable() {
+      const tbody = document.getElementById('table-body');
+      const items = Object.values(state).sort((a, b) => (b.ready ? b.probBull : -1) - (a.ready ? a.probBull : -1));
+      items.forEach((item, i) => {
+        const tr = document.getElementById(`row-${item.symbol}`);
+        if (!tr) return;
+        tbody.appendChild(tr);
+        const rank = tr.querySelector('.rank-num');
+        if (rank) rank.innerText = i + 1;
+      });
+    }
+
+    function updateTableRow(sym) {
+      const item = state[sym];
+      if (!item) return;
+      const priceEl = document.getElementById(`tbl-price-${sym}`);
+      if (priceEl) priceEl.innerText = formatPrice(item.price);
+      const probEl = document.getElementById(`tbl-prob-${sym}`);
+      const tp1El = document.getElementById(`tbl-tp1-${sym}`);
+      const hitEl = document.getElementById(`tbl-hit-${sym}`);
+      if (!item.ready) {
+        if (probEl) { probEl.innerText = '—'; probEl.className = 'bold'; }
+        if (tp1El) { tp1El.innerText = '—'; tp1El.className = 'mono'; }
+        if (hitEl) hitEl.innerText = '';
+        const mv0 = document.getElementById(`tbl-move-${sym}`); if (mv0) mv0.innerText = '';
+        return;
+      }
+      const cls = item.dir > 0 ? 'val-up' : 'val-down';
+      if (probEl) {
+        probEl.innerText = `${item.probBull.toFixed(1)}%${item.probCal != null ? '' : ' ⚠'}`;
+        probEl.className = item.noEdge ? 'bold muted' : `bold ${cls}`;
+        if (item.noEdge) probEl.title = 'Sin ventaja histórica clara';
+        probEl.title = item.probCal != null ? '' : 'Sin calibrar: historial corto';
+      }
+      if (tp1El) { tp1El.innerText = formatPrice(item.tp1); tp1El.className = `mono ${cls}`; }
+      const st = item.bt && item.bt.tp ? item.bt.tp[item.dir] : null;
+      if (hitEl) hitEl.innerText = st ? pct(st.h1, 0) : '—';
+      const dwEl = document.getElementById(`tbl-dw-${sym}`);
+      if (dwEl) {
+        const a = item.dwStatus && item.dwStatus.alert;
+        dwEl.className = 'dw-tag' + (a ? ` ${a.role === 'soporte' ? 'up' : 'down'}${a.state === 'zona' ? ' hot' : ''}` : '');
+        dwEl.innerText = a ? `${a.role === 'soporte' ? 'S' : 'R'} ${a.scope === 'día' ? 'día' : 'sem'}` : '';
+        dwEl.title = a ? dwAlertText(a) : '';
+      }
+      const mvEl = document.getElementById(`tbl-move-${sym}`);
+      const mvSrc = item.analog ? { up: item.analog.pUp, dn: item.analog.pDn } : item.move;
+      if (mvEl) mvEl.innerHTML = mvSrc
+        ? `<span class="val-up">${Math.round(mvSrc.up * 100)}</span>/<span class="val-down">${Math.round(mvSrc.dn * 100)}</span>`
+        : '—';
+    }
+
+    // ============================================================
+    // MODAL DE BACKTEST
+    // ============================================================
+    function openBacktestModal() {
+      document.getElementById('bt-overlay').classList.add('active');
+      renderBacktestModal();
+    }
+    function closeBacktestModal() { document.getElementById('bt-overlay').classList.remove('active'); }
+
+    function renderBacktestModal() {
+      const tf = currentTimeframe;
+      document.getElementById('bt-meta').innerText =
+        `Temporalidad ${TF_LABEL[tf]} · dirección medida a ${HORIZON_LABEL[tf]} · TP/SL evaluados dentro de ${TPWIN_LABEL[tf]} · comisiones ${CFG.feePct}% ida y vuelta · RSI ${rsiMode === 'auto' ? 'automático por par' : rsiMode + ' períodos'} (las columnas muestran los resultados con el RSI en uso). Tocá una fila para ver su curva de calibración.`;
+      const tbody = document.getElementById('bt-body');
+      tbody.innerHTML = '';
+      const items = Object.values(state).sort((a, b) => a.symbol.localeCompare(b.symbol));
+      if (!btSelected || !state[btSelected] || !state[btSelected].bt) {
+        const firstWithBt = items.find(it => it.bt);
+        btSelected = firstWithBt ? firstWithBt.symbol : null;
+      }
+      const tpTxt = t => t ? `${pct(t.h1, 0)} / ${pct(t.h2, 0)} / ${pct(t.h3, 0)}` : '—';
+      items.forEach(item => {
+        const bt = item.bt;
+        const tr = document.createElement('tr');
+        if (item.symbol === btSelected) tr.className = 'selected';
+        if (!bt) {
+          tr.innerHTML = `<td class="bold">${item.symbol}</td><td colspan="10" class="muted">${item.loadError ? 'Error de carga' : 'Historial insuficiente para backtest'}</td>`;
+        } else {
+          const o = bt.oos;
+          const oosTxt = o ? `<span class="${o.acc > o.accBase ? 'val-up' : 'val-down'}">${pct(o.acc)}</span> vs ${pct(o.accBase)}` : '—';
+          const skillTxt = o ? `<span class="${o.skill > 0 ? 'val-up' : 'val-down'}">${o.skill >= 0 ? '+' : ''}${(o.skill * 100).toFixed(1)}%</span>` : '—';
+          const st = bt.strong;
+          const strongTxt = st ? `<span class="${st.net > 0 ? 'val-up' : 'val-down'}">${st.net >= 0 ? '+' : ''}${st.net.toFixed(2)}%</span> (${pct(st.win, 0)} gan., n=${st.n})` : '—';
+          tr.innerHTML = `
+            <td class="bold">${item.symbol}</td>
+            <td class="mono">${bt.n}</td>
+            <td class="muted">${fmtDate(bt.from)} – ${fmtDate(bt.to)}</td>
+            <td class="mono">${pct(bt.fit.base)}</td>
+            <td class="mono">${oosTxt}</td>
+            <td class="mono">${skillTxt}</td>
+            <td class="mono">${tpTxt(bt.tp[1])}</td>
+            <td class="mono">${tpTxt(bt.tp[-1])}</td>
+            <td class="mono">${strongTxt}</td>
+            <td class="mono">${rsiCompare(item)}</td>
+            <td class="mono">${moveCompare(bt)}</td>`;
+          tr.onclick = () => { btSelected = item.symbol; renderBacktestModal(); };
+        }
+        tbody.appendChild(tr);
+      });
+      drawCalibration(btSelected ? state[btSelected] : null);
+    }
+
+    function moveCompare(bt) {
+      const m = bt && bt.move;
+      if (!m) return '—';
+      const b = m.fit.base, sk = x => x == null ? '<span class="muted">pocos saltos</span>' : `<span class="${x > 0 ? 'val-up' : 'val-down'}">${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%</span>`;
+      const an = bt.analog && bt.analog.oos;
+      return `${pct(b.up / b.n, 0)} / ${pct(b.dn / b.n, 0)}` + (an ? ` · casos parecidos ${sk(an.skillUp)} / ${sk(an.skillDn)}` : '');
+    }
+
+    function rsiCompare(item) {
+      if (!item.btBy) return '—';
+      return RSI_PERIODS.map(p => {
+        const b = item.btBy[p];
+        const sk = b && b.oos ? b.oos.skill : null;
+        const txt = sk == null ? '—' : `${sk >= 0 ? '+' : ''}${(sk * 100).toFixed(1)}%`;
+        const cls = sk == null ? '' : sk > 0 ? 'val-up' : 'val-down';
+        return `${p}: <span class="${cls}">${txt}</span>${item.rsiP === p ? ' ✓' : ''}`;
+      }).join(' · ');
+    }
+
+    function drawCalibration(item) {
+      const canvas = document.getElementById('calib-canvas');
+      const title = document.getElementById('calib-title');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.width = canvas.clientWidth * dpr;
+      const H = canvas.height = canvas.clientHeight * dpr;
+      ctx.clearRect(0, 0, W, H);
+      if (!item || !item.bt) { title.innerText = 'Curva de calibración'; return; }
+      title.innerText = `Curva de calibración — ${item.symbol}: % de veces que subió, según el rango de puntaje`;
+
+      const fit = item.bt.fit;
+      const padL = 44 * dpr, padR = 12 * dpr, padT = 16 * dpr, padB = 34 * dpr;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const y = v => padT + plotH - v * plotH;
+      ctx.font = `${Math.floor(10 * dpr)}px monospace`;
+
+      ctx.strokeStyle = '#2b313a'; ctx.fillStyle = '#848e9c'; ctx.lineWidth = 1;
+      ctx.textAlign = 'right';
+      [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+        ctx.beginPath(); ctx.moveTo(padL, y(v)); ctx.lineTo(W - padR, y(v)); ctx.stroke();
+        ctx.fillText(`${v * 100}%`, padL - 6 * dpr, y(v) + 3 * dpr);
+      });
+
+      const nb = fit.buckets.length, bw = plotW / nb;
+      fit.buckets.forEach((b, i) => {
+        const x = padL + i * bw;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#848e9c';
+        ctx.fillText(`${b.lo}–${Math.round(b.hi)}`, x + bw / 2, H - padB + 14 * dpr);
+        ctx.fillText(`n=${b.n}`, x + bw / 2, H - padB + 26 * dpr);
+        if (!b.n) return;
+        const rate = b.up / b.n;
+        ctx.fillStyle = rate >= fit.base ? 'rgba(14,203,129,0.7)' : 'rgba(246,70,93,0.7)';
+        ctx.fillRect(x + bw * 0.18, y(rate), bw * 0.64, y(0) - y(rate));
+        ctx.fillStyle = '#eaecef';
+        ctx.fillText(pct(rate, 0), x + bw / 2, y(rate) - 4 * dpr);
+      });
+
+      ctx.strokeStyle = '#f0b90b'; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(padL, y(fit.base)); ctx.lineTo(W - padR, y(fit.base)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#f0b90b'; ctx.textAlign = 'left';
+      ctx.fillText(`base ${pct(fit.base)}`, padL + 4 * dpr, y(fit.base) - 4 * dpr);
+    }
+
+    // ============================================================
+    // GRÁFICO
+    // ============================================================
+    function formatDateForTF(timestamp, tf) {
+      const d = new Date(timestamp);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      if (tf === '15m') return `${hours}:${mins}`;
+      if (tf === '1h') return `${day}/${month} ${hours}h`;
+      return `${day}/${month}`;
+    }
+
+    function drawCanvasChart(item) {
+      const canvas = document.getElementById(`canvas-${item.symbol}`);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const tooltip = document.getElementById(`tooltip-${item.symbol}`);
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.width = canvas.clientWidth * dpr;
+      const height = canvas.height = canvas.clientHeight * dpr;
+      ctx.clearRect(0, 0, width, height);
+
+      const all = item.klines;
+      if (!all.length || !width) return;
+      const nVis = clamp(Math.floor(canvas.clientWidth / 7), MIN_VISIBLE_BARS, MAX_VISIBLE_BARS);
+      const kl = all.slice(-nVis);
+      const start = all.length - kl.length;
+      const lastClose = kl[kl.length - 1].close;
+      const ser = item.ser;
+      const font = `${Math.floor(10 * dpr)}px monospace`;
+      ctx.font = font;
+
+      // Distribución vertical: precio, MACD, RSI y eje de tiempo. Eje de precios a la derecha.
+      const axisW = 68 * dpr;
+      const plotW = width - axisW;
+      const priceH = height * 0.60;
+      const macdTop = height * 0.62, macdH = height * 0.11;
+      const rsiTop = height * 0.75, rsiH = height * 0.12;
+      const axisTop = height * 0.895;
+
+      const prices = kl.flatMap(k => [k.high, k.low]);
+      if (item.ready) [item.tp1, item.sl].forEach(p => { if (p > 0 && isFinite(p)) prices.push(p); });
+      const minP = Math.min(...prices), maxP = Math.max(...prices);
+      const range = (maxP - minP) || 1;
+      const getY = p => priceH - ((p - minP) / range) * (priceH - 20 * dpr) - 10 * dpr;
+      const inRange = p => p > 0 && p >= minP && p <= maxP;
+      const cw = plotW / kl.length;
+
+      // Etiquetas del eje derecho (precio actual, TP1, TP2, SL), separadas para que no se pisen
+      const lastK = kl[kl.length - 1];
+      const tagH = 16 * dpr;
+      const tags = [];
+      if (item.ready) {
+        const a = item.dir > 0 ? 'rgba(14,203,129,' : 'rgba(246,70,93,';
+        tags.push({ p: item.sl, bg: '#3a3f47', fg: '#eaecef' });
+        tags.push({ p: item.tp2, bg: a + '0.35)', fg: '#eaecef' });
+        tags.push({ p: item.tp1, bg: a + '0.6)', fg: '#fff' });
+      }
+      tags.push({ p: lastK.close, bg: lastK.close >= lastK.open ? '#0ecb81' : '#f6465d', fg: '#0b0e11' });
+      const shown = tags.filter(t => inRange(t.p)).map(t => ({ ...t, y: clamp(getY(t.p), tagH / 2, priceH - tagH / 2) }))
+        .sort((a, b) => a.y - b.y);
+      for (let i = 1; i < shown.length; i++) if (shown[i].y - shown[i - 1].y < tagH + 1) shown[i].y = shown[i - 1].y + tagH + 1;
+      for (let i = shown.length - 1; i >= 0; i--) {
+        const maxY = i === shown.length - 1 ? priceH - tagH / 2 : shown[i + 1].y - tagH - 1;
+        if (shown[i].y > maxY) shown[i].y = maxY;
+      }
+
+      // Grilla con precios en el eje derecho (se omiten los que quedan debajo de una etiqueta)
+      ctx.strokeStyle = '#1e2329'; ctx.lineWidth = 1;
+      ctx.fillStyle = '#5e6673'; ctx.textAlign = 'left';
+      for (let s = 0; s <= 5; s++) {
+        const p = minP + (range * s) / 5;
+        const gy = getY(p);
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(plotW, gy); ctx.stroke();
+        if (!shown.some(t => Math.abs(t.y - gy) < tagH)) ctx.fillText(formatPrice(p), plotW + 6 * dpr, gy + 3 * dpr);
+      }
+      ctx.strokeStyle = '#2b313a';
+      ctx.beginPath(); ctx.moveTo(plotW + 0.5, 0); ctx.lineTo(plotW + 0.5, axisTop); ctx.stroke();
+
+      // Volumen
+      const maxV = Math.max(...kl.map(k => k.volume)) || 1;
+      kl.forEach((k, i) => {
+        const h = (k.volume / maxV) * priceH * 0.18;
+        const x = i * cw + cw * 0.15, w = cw * 0.7;
+        if (k.buy != null && k.volume > 0) {
+          // Abajo la parte de compras agresivas (verde), arriba la de ventas agresivas (rojo)
+          const hb = h * (k.buy / k.volume);
+          ctx.fillStyle = 'rgba(14,203,129,0.32)'; ctx.fillRect(x, priceH - hb, w, hb);
+          ctx.fillStyle = 'rgba(246,70,93,0.32)'; ctx.fillRect(x, priceH - h, w, h - hb);
+        } else {
+          ctx.fillStyle = k.close >= k.open ? 'rgba(14,203,129,0.18)' : 'rgba(246,70,93,0.18)';
+          ctx.fillRect(x, priceH - h, w, h);
+        }
+      });
+
+      const hLine = (p, color, w, dash) => {
+        if (!inRange(p)) return;
+        const yy = getY(p);
+        ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []);
+        ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke();
+        ctx.setLineDash([]);
+      };
+
+      // Niveles
+      (item.clusters || []).forEach(c => {
+        if (c.strength < 2) return;
+        ctx.globalAlpha = Math.min(1, 0.2 + c.strength * 0.15);
+        hLine(c.price, '#00bcd4', 1.2);
+      });
+      ctx.globalAlpha = 1;
+      // Máx./mín. de ayer (celeste) y de la semana anterior (violeta); más gruesas si el precio está en zona
+      if (item.dwStatus) {
+        const labelYs = [];
+        item.dwStatus.rows.forEach(r => {
+          if (!inRange(r.price)) return;
+          const col = r.scope === 'día' ? '#7fb3d5' : '#b36bd6';
+          hLine(r.price, col, r.state === 'zona' ? 2.4 : 1.2, r.scope === 'día' ? [7, 4] : [3, 3]);
+          // Etiqueta solo si no se pisa con otra ya dibujada
+          const ly = getY(r.price) - 3 * dpr;
+          if (labelYs.some(y => Math.abs(y - ly) < 11 * dpr)) return;
+          labelYs.push(ly);
+          ctx.fillStyle = col; ctx.textAlign = 'left';
+          ctx.fillText(`${r.scope === 'día' ? 'Ayer' : 'Sem. ant.'} ${r.kind === 'high' ? 'máx' : 'mín'}`, 4 * dpr, ly);
+        });
+      }
+      if (item.vp) hLine(item.vp.poc, '#ff9800', 1.4, [1, 3]);
+
+      // Órdenes grandes de la última hora: punto en su precio y su vela (verde compra, rojo venta)
+      if (item.tradeStats && item.tradeStats.bigTrades.length) {
+        const tfMs = TF_MS[currentTimeframe], t0 = kl[0].time, thr = item.tradeStats.thr;
+        item.tradeStats.bigTrades.forEach(t => {
+          const idx = Math.floor((t.T - t0) / tfMs);
+          if (idx < 0 || idx >= kl.length || t.p < minP || t.p > maxP) return;
+          const r = clamp(Math.sqrt(t.usd / thr) * 2.6, 2.5, 9) * dpr;
+          const x = idx * cw + cw / 2, yy = getY(t.p);
+          ctx.beginPath(); ctx.arc(x, yy, r, 0, Math.PI * 2);
+          ctx.fillStyle = t.buy ? 'rgba(14,203,129,0.55)' : 'rgba(246,70,93,0.55)'; ctx.fill();
+          ctx.strokeStyle = t.buy ? '#0ecb81' : '#f6465d'; ctx.lineWidth = 1; ctx.stroke();
+        });
+      }
+
+      // Niveles mayores: línea si están a la vista, marca en el borde si quedan fuera
+      if (item.majorNear) {
+        const mk = (l, lbl, isRes) => {
+          const d = (l.price / lastClose - 1) * 100;
+          const txt = `${isRes ? '▲' : '▼'} ${lbl} ${formatPrice(l.price)} (${d >= 0 ? '+' : ''}${d.toFixed(1)}%)`;
+          ctx.textAlign = 'right';
+          if (l.price >= minP && l.price <= maxP) {
+            const yy = getY(l.price);
+            ctx.strokeStyle = 'rgba(240,185,11,0.75)'; ctx.lineWidth = 1.6; ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(plotW, yy); ctx.stroke(); ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(240,185,11,0.95)'; ctx.fillText(`${lbl} mayor`, plotW - 4 * dpr, yy - 3 * dpr);
+            return true;
+          }
+          return false;
+        };
+        const offAbove = [], offBelow = [];
+        item.majorNear.above.forEach((l, i) => { if (!mk(l, `R${i + 1}`, true) && l.price > maxP) offAbove.push([l, `R${i + 1}`]); });
+        item.majorNear.below.forEach((l, i) => { if (!mk(l, `S${i + 1}`, false) && l.price < minP) offBelow.push([l, `S${i + 1}`]); });
+        const tagOff = ([l, lbl], y, isRes) => {
+          const d = (l.price / lastClose - 1) * 100;
+          const txt = `${isRes ? '▲' : '▼'} ${lbl} ${formatPrice(l.price)}  ${d >= 0 ? '+' : ''}${d.toFixed(1)}%`;
+          ctx.font = font; ctx.textAlign = 'left';
+          const w = ctx.measureText(txt).width + 8 * dpr;
+          ctx.fillStyle = 'rgba(11,14,17,0.85)'; ctx.fillRect(2 * dpr, y - 10 * dpr, w, 14 * dpr);
+          ctx.strokeStyle = 'rgba(240,185,11,0.6)'; ctx.lineWidth = 1; ctx.strokeRect(2 * dpr + 0.5, y - 10 * dpr + 0.5, w - 1, 14 * dpr - 1);
+          ctx.fillStyle = '#f0b90b'; ctx.fillText(txt, 6 * dpr, y + 1 * dpr);
+        };
+        if (offAbove.length) tagOff(offAbove[0], 12 * dpr, true);
+        if (offBelow.length) tagOff(offBelow[0], priceH - 6 * dpr, false);
+      }
+
+      // FVG abiertos: caja desde la vela que los creó hasta el borde, solo la parte sin llenar
+      if (item.fvg && item.fvg.open.length) {
+        const shownF = item.fvg.open
+          .filter(g => g.remTop >= minP && g.remBot <= maxP)
+          .sort((a, b) => Math.abs((a.remTop + a.remBot) / 2 - lastClose) - Math.abs((b.remTop + b.remBot) / 2 - lastClose))
+          .slice(0, FVG.maxDraw);
+        shownF.forEach(g => {
+          const col = g.type > 0 ? 'rgba(14,203,129,' : 'rgba(246,70,93,';
+          const x0 = Math.max(0, (g.i - 1 - start) * cw);
+          const yTop = getY(Math.min(g.remTop, maxP)), yBot = getY(Math.max(g.remBot, minP));
+          ctx.fillStyle = col + '0.13)';
+          ctx.fillRect(x0, yTop, plotW - x0, Math.max(yBot - yTop, 1));
+          ctx.strokeStyle = col + '0.45)'; ctx.lineWidth = 1; ctx.setLineDash([]);
+          ctx.strokeRect(x0 + 0.5, yTop + 0.5, plotW - x0 - 1, Math.max(yBot - yTop - 1, 0));
+          ctx.fillStyle = col + '0.85)'; ctx.textAlign = 'left';
+          if (yBot - yTop > 9 * dpr) ctx.fillText('FVG', x0 + 3 * dpr, yTop + 9 * dpr);
+        });
+      }
+
+      // Zonas de muro del libro (el tramo de 0,5% completo, sombreado)
+      if (item.book) {
+        [['ask', 'rgba(246,70,93,'], ['bid', 'rgba(14,203,129,']].forEach(([s, c]) => {
+          const w = item.book.sides[s].wall;
+          if (!w) return;
+          const lo = Math.max(w.lo, minP), hi = Math.min(w.hi, maxP);   // tramo absoluto del muro
+          if (hi <= lo) return;
+          ctx.fillStyle = c + '0.10)';
+          ctx.fillRect(0, getY(hi), plotW, getY(lo) - getY(hi));
+          ctx.strokeStyle = c + '0.55)'; ctx.lineWidth = 1; ctx.setLineDash([6, 3]);
+          const wy = getY(w.price);
+          if (w.price >= minP && w.price <= maxP) { ctx.beginPath(); ctx.moveTo(0, wy); ctx.lineTo(plotW, wy); ctx.stroke(); }
+          ctx.setLineDash([]);
+          ctx.fillStyle = c + '0.9)'; ctx.textAlign = 'left';
+          ctx.fillText(`muro ${s === 'ask' ? 'venta' : 'compra'} ${fmtUsd(w.notional)}`, 4 * dpr, Math.max(getY(hi) + 11 * dpr, 11 * dpr));
+        });
+      }
+
+      // VWAP
+      if (ser) {
+        ctx.strokeStyle = 'rgba(234,236,239,0.55)'; ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        let started = false;
+        kl.forEach((_, i) => {
+          const v = ser.vwap[start + i];
+          if (v == null) return;
+          const x = i * cw + cw / 2, yy = getY(v);
+          if (!started) { ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy);
+        });
+        if (started) ctx.stroke();
+      }
+
+      // Velas
+      kl.forEach((k, i) => {
+        const x = i * cw + cw / 2;
+        const isUp = k.close >= k.open;
+        ctx.strokeStyle = ctx.fillStyle = isUp ? '#0ecb81' : '#f6465d';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, getY(k.high)); ctx.lineTo(x, getY(k.low)); ctx.stroke();
+        const oy = getY(k.open), cy = getY(k.close);
+        ctx.fillRect(x - cw * 0.35, Math.min(oy, cy), cw * 0.7, Math.max(Math.abs(cy - oy), 1.5));
+      });
+
+      // TP y SL
+      const dirCol = item.dir > 0 ? '#0ecb81' : '#f6465d';
+      if (item.ready) {
+        hLine(item.tp1, dirCol, 1.5, [4, 4]);
+        hLine(item.tp2, dirCol, 1.5, [4, 4]);
+        hLine(item.sl, '#b0b8c4', 1.3, [4, 4]);
+      }
+
+      shown.forEach(t => {
+        ctx.fillStyle = t.bg;
+        ctx.fillRect(plotW + 1, t.y - tagH / 2, axisW - 2, tagH);
+        ctx.fillStyle = t.fg; ctx.textAlign = 'left';
+        ctx.fillText(formatPrice(t.p), plotW + 5 * dpr, t.y + 3.5 * dpr);
+      });
+
+      // Panel MACD (histograma)
+      ctx.fillStyle = '#0f1115';
+      ctx.fillRect(0, macdTop, plotW, macdH);
+      if (ser) {
+        const hs = kl.map((_, i) => ser.hist[start + i]);
+        const maxH = Math.max(...hs.map(h => Math.abs(h || 0))) || 1;
+        const mid = macdTop + macdH / 2;
+        ctx.strokeStyle = 'rgba(132,142,156,0.3)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(plotW, mid); ctx.stroke();
+        hs.forEach((h, i) => {
+          if (h == null) return;
+          const bh = (h / maxH) * (macdH / 2 - 2 * dpr);
+          ctx.fillStyle = h >= 0 ? 'rgba(14,203,129,0.7)' : 'rgba(246,70,93,0.7)';
+          ctx.fillRect(i * cw + cw * 0.2, h >= 0 ? mid - bh : mid, cw * 0.6, Math.abs(bh));
+        });
+      }
+      ctx.fillStyle = '#5e6673'; ctx.textAlign = 'left';
+      ctx.fillText('MACD hist.', 4 * dpr, macdTop + 11 * dpr);
+
+      // Panel RSI
+      ctx.fillStyle = '#0f1115';
+      ctx.fillRect(0, rsiTop, plotW, rsiH);
+      const getYR = v => (rsiTop + rsiH) - (v / 100) * rsiH;
+      ctx.strokeStyle = 'rgba(132, 142, 156, 0.3)'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+      const bands = rsiBands(item.rsiP);
+      bands.forEach(v => { ctx.beginPath(); ctx.moveTo(0, getYR(v)); ctx.lineTo(plotW, getYR(v)); ctx.stroke(); });
+      ctx.setLineDash([]);
+      const rsiAt = i => (ser && ser.rsi[start + i] != null) ? ser.rsi[start + i] : null;
+      ctx.strokeStyle = '#f0b90b'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let started = false;
+      kl.forEach((_, i) => {
+        const r = rsiAt(i);
+        if (r === null) return;
+        const x = i * cw + cw / 2;
+        if (!started) { ctx.moveTo(x, getYR(r)); started = true; } else ctx.lineTo(x, getYR(r));
+      });
+      if (started) ctx.stroke();
+      ctx.fillStyle = '#5e6673'; ctx.textAlign = 'left';
+      ctx.fillText(`RSI ${item.rsiP}`, 4 * dpr, rsiTop + 11 * dpr);
+      bands.forEach(v => ctx.fillText(String(v), plotW + 6 * dpr, getYR(v) + 3 * dpr));
+      const rLast = rsiAt(kl.length - 1);
+      if (rLast != null) {
+        const yy = clamp(getYR(rLast), rsiTop + 8 * dpr, rsiTop + rsiH - 8 * dpr);
+        ctx.fillStyle = '#f0b90b';
+        ctx.fillRect(plotW + 30 * dpr, yy - 7 * dpr, axisW - 32 * dpr, 14 * dpr);
+        ctx.fillStyle = '#0b0e11';
+        ctx.fillText(rLast.toFixed(1), plotW + 34 * dpr, yy + 3.5 * dpr);
+      }
+
+      // Eje de tiempo
+      ctx.fillStyle = '#181a20';
+      ctx.fillRect(0, axisTop, width, height - axisTop);
+      ctx.strokeStyle = '#2b313a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, axisTop); ctx.lineTo(width, axisTop); ctx.stroke();
+      ctx.fillStyle = '#848e9c';
+      // Etiquetas separadas al menos 64 px para que no se pisen en gráficos angostos
+      const minGap = 64 * dpr;
+      const step = Math.max(1, Math.ceil(minGap / cw));
+      kl.forEach((k, i) => {
+        if ((i % step === 0 && (kl.length - 1 - i) * cw >= minGap) || i === kl.length - 1) {
+          const x = i * cw + cw / 2;
+          ctx.textAlign = i === 0 ? 'left' : (i === kl.length - 1 ? 'right' : 'center');
+          const tx = i === 0 ? 2 * dpr : x;
+          ctx.fillText(formatDateForTF(k.time, currentTimeframe), tx, axisTop + 14 * dpr);
+          ctx.beginPath(); ctx.moveTo(x, axisTop); ctx.lineTo(x, axisTop + 4 * dpr); ctx.stroke();
+        }
+      });
+
+      // Tooltip
+      canvas.onmousemove = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const idx = Math.floor(mx / cw);
+        if (mx >= plotW || idx < 0 || idx >= kl.length || !tooltip) { if (tooltip) tooltip.style.display = 'none'; return; }
+        const k = kl[idx];
+        const r = rsiAt(idx);
+        const rv = ser ? ser.relVol[start + idx] : null;
+        const h = ser ? ser.hist[start + idx] : null;
+        const chg = (k.close / k.open - 1) * 100;
+        const bpTxt = k.buy != null && k.volume > 0 ? ` | Compras ${Math.round(k.buy / k.volume * 100)}%` : '';
+        const d = new Date(k.time).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        tooltip.style.display = 'block';
+        tooltip.innerText = `[${d}] O:${formatPrice(k.open)} H:${formatPrice(k.high)} L:${formatPrice(k.low)} C:${formatPrice(k.close)} (${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%) | RSI ${r === null ? '—' : r.toFixed(1)} | MACD ${h == null ? '—' : (h > 0 ? '+' : '−')} | Vol ${rv == null ? '—' : rv.toFixed(1) + 'x'}${bpTxt}`;
+      };
+      canvas.onmouseleave = () => { if (tooltip) tooltip.style.display = 'none'; };
+    }
+
+    function formatPrice(val) {
+      if (!val || !isFinite(val)) return '—';
+      if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (val >= 1) return val.toFixed(3);
+      return val.toLocaleString('en-US', { minimumSignificantDigits: 4, maximumSignificantDigits: 4, useGrouping: false });
+    }
+
+    // ---------------- App instalable ----------------
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service worker:', e)));
+    }
+    let installPrompt = null;
+    const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      installPrompt = e;
+      document.getElementById('install-btn').style.display = '';
+    });
+    window.addEventListener('appinstalled', () => {
+      installPrompt = null;
+      document.getElementById('install-btn').style.display = 'none';
+    });
+    // En iPhone/iPad no existe el aviso automático: se muestra el botón con instrucciones
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS && !isStandalone()) document.getElementById('install-btn').style.display = '';
+    async function installApp() {
+      if (installPrompt) {
+        installPrompt.prompt();
+        try { await installPrompt.userChoice; } catch (e) {}
+        installPrompt = null;
+        document.getElementById('install-btn').style.display = 'none';
+      } else if (isIOS) {
+        alert('Para instalarla en iPhone/iPad:\n\n1. Abrí esta página en Safari.\n2. Tocá el botón Compartir (el cuadrado con la flecha hacia arriba).\n3. Elegí "Agregar a pantalla de inicio".');
+      }
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
