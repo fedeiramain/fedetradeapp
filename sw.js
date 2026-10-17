@@ -3,7 +3,7 @@
 //   y, si no hay conexión, se abre la copia guardada.
 // - Los íconos y el manifest se sirven desde la copia guardada.
 // - Las llamadas a Binance (otro dominio) no se tocan: van siempre directo a la red.
-const CACHE = 'screener-v33';
+const CACHE = 'screener-v41';
 const SHELL = ['./', './index.html', './app.html', './manifest.webmanifest',
                './icon-192.png', './icon-512.png', './icon-maskable-512.png',
                './apple-touch-icon.png', './favicon-32.png'];
@@ -28,8 +28,11 @@ self.addEventListener('fetch', e => {
     // (cada página se guarda con su propia dirección: la de instalación y la de la app)
     e.respondWith(
       fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy));
+        // Solo se guarda una página real (no la pantalla de inicio de sesión ni una redirección)
+        if (res.ok && res.type === 'basic' && !res.redirected) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(req, copy));
+        }
         return res;
       }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match('./app.html')))
     );
